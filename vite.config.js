@@ -36,5 +36,19 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  // --- VITE 8 / ROLLDOWN COMPATIBILITY PATCH ---
+  optimizeDeps: {
+    include: ['react-is', 'recharts']
+  },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['react', 'react-dom', 'recharts', 'lucide-react']
+        }
+      }
+    }
+  }
 });
