@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+/* Admin-specific scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e5e0d8; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #cfccc6; }
