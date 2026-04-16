@@ -178,11 +178,12 @@ export const OrdersListScreen = () => {
                     <div className="text-left lg:text-right w-full lg:w-auto">
                       <p className="text-xs font-bold text-[#8c8a86] uppercase tracking-widest mb-1">Total</p>
                       <p className="font-black text-2xl text-[#e25f38]">{formatCurrency(order.total_amount)}</p>
-                      {order.payment_method === 'momo' && order.momo_receipt_url && (
-                        <button onClick={() => setSelectedReceipt(order.momo_receipt_url)} className="mt-2 flex items-center justify-center lg:justify-end gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors w-full lg:w-auto">
-                          <FileImage className="w-3.5 h-3.5" /> View Receipt
-                        </button>
-                      )}
+                     // From your OrdersListScreen.jsx (Lines 111-115)
+{order.payment_method === 'momo' && order.momo_receipt_url && (
+  <button onClick={() => setSelectedReceipt(order.momo_receipt_url)} className="mt-2 flex items-center justify-center lg:justify-end gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors w-full lg:w-auto">
+    <FileImage className="w-3.5 h-3.5" /> View Receipt
+  </button>
+)}
                     </div>
                     {action && (
                       <button onClick={() => handleUpdateStatus(order.id, action.next)} className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold shadow-md transition-all active:scale-95 w-full lg:w-auto ${action.color}`}>
