@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChefHat, CheckCircle2, Check, Clock, Loader2, Bike, MapPin, FileImage, XCircle, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, ChefHat, CheckCircle2, Clock, Loader2, Bike, MapPin, FileImage, XCircle, AlertCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../utils/helpers';
+import Swal from 'sweetalert2';
+import { DateTime } from 'luxon';
 
 export const OrdersListScreen = () => {
   const queryClient = useQueryClient();
@@ -10,10 +12,8 @@ export const OrdersListScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   
-  const audioRef = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'));
   const filters = ['All', 'pending', 'prepping', 'delivering', 'delivered'];
 
-  // 1. TANSTACK FETCH: Cache the baseline
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['liveOrders'],
     queryFn: async () => {
@@ -26,30 +26,6 @@ export const OrdersListScreen = () => {
     }
   });
 
-  // 2. SUPABASE SOCKET TO TANSTACK CACHE INJECTION
-  useEffect(() => {
-    const channel = supabase
-      .channel('admin_live_orders')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            audioRef.current?.play().catch(() => console.log("Audio locked by browser"));
-            queryClient.setQueryData(['liveOrders'], (old = []) => [payload.new, ...old]);
-          } else if (payload.eventType === 'UPDATE') {
-            queryClient.setQueryData(['liveOrders'], (old = []) => 
-              old.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o)
-            );
-          }
-        }
-      )
-      .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, [queryClient]);
-
-  // 3. TANSTACK MUTATION: Order Status Updates
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }) => {
       const { error } = await supabase.from('orders').update({ status }).eq('id', id);
@@ -67,11 +43,37 @@ export const OrdersListScreen = () => {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['liveOrders'] })
   });
 
-  const handleUpdateStatus = (id, status) => statusMutation.mutate({ id, status });
+  // SWEETALERT2 CONFIRMATION ENGINE
+  const handleUpdateStatus = (id, nextStatus, label) => {
+    Swal.fire({
+      title: 'Confirm Action',
+      text: `Are you sure you want to ${label.toLowerCase()}?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#e25f38',
+      cancelButtonColor: '#1c1c1c',
+      confirmButtonText: `Yes, ${label}`,
+      background: '#fdfbf7',
+      color: '#1c1c1c'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        statusMutation.mutate({ id, status: nextStatus });
+        Swal.fire({
+          title: 'Status Updated',
+          text: `Order has been moved to ${nextStatus}.`,
+          icon: 'success',
+          confirmButtonColor: '#e25f38',
+          background: '#fdfbf7',
+          timer: 1500
+        });
+      }
+    });
+  };
 
-  // --- UI COMPUTATIONS ---
   const getShortId = (uuid) => `#BBS-${uuid?.split('-')[0].toUpperCase()}`;
-  const formatTime = (dateString) => new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  // LUXON INTEGRATION FOR FLAWLESS TIME PARSING
+  const formatTime = (dateString) => DateTime.fromISO(dateString).toFormat('h:mm a');
   
   const getItemsString = (orderItems) => {
     if (!orderItems || orderItems.length === 0) return 'No items found';
@@ -178,15 +180,14 @@ export const OrdersListScreen = () => {
                     <div className="text-left lg:text-right w-full lg:w-auto">
                       <p className="text-xs font-bold text-[#8c8a86] uppercase tracking-widest mb-1">Total</p>
                       <p className="font-black text-2xl text-[#e25f38]">{formatCurrency(order.total_amount)}</p>
-                     // From your OrdersListScreen.jsx (Lines 111-115)
-{order.payment_method === 'momo' && order.momo_receipt_url && (
-  <button onClick={() => setSelectedReceipt(order.momo_receipt_url)} className="mt-2 flex items-center justify-center lg:justify-end gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors w-full lg:w-auto">
-    <FileImage className="w-3.5 h-3.5" /> View Receipt
-  </button>
-)}
+                      {order.payment_method === 'momo' && order.momo_receipt_url && (
+                        <button onClick={() => setSelectedReceipt(order.momo_receipt_url)} className="mt-2 flex items-center justify-center lg:justify-end gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors w-full lg:w-auto">
+                          <FileImage className="w-3.5 h-3.5" /> View Receipt
+                        </button>
+                      )}
                     </div>
                     {action && (
-                      <button onClick={() => handleUpdateStatus(order.id, action.next)} className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold shadow-md transition-all active:scale-95 w-full lg:w-auto ${action.color}`}>
+                      <button onClick={() => handleUpdateStatus(order.id, action.next, action.label)} className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold shadow-md transition-all active:scale-95 w-full lg:w-auto ${action.color}`}>
                         <action.icon className="w-5 h-5" /> {action.label}
                       </button>
                     )}

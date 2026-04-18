@@ -2,22 +2,30 @@ import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Bell, LockKeyhole, Menu, X, LogOut } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { useAdminStore } from '../store/useAdminStore';
 
 export const AdminLayout = ({ children, activeTab, setActiveTab }) => {
-  const [isShiftActive, setIsShiftActive] = useState(false);
+  const { isShiftActive, startShift } = useAdminStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const { signOut, user } = useAuthStore();
 
   const handleStartShift = () => {
     try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioContext();
-      ctx.resume();
+      // 1. The Global Audio Unlocker
+      const alertSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      alertSound.volume = 0; // Mute for the initial silent play
+      alertSound.play().then(() => {
+        alertSound.pause();
+        alertSound.volume = 1; // Restore volume
+        window.bbsAudioEngine = alertSound; // Bind to the global window object
+      }).catch(e => console.warn("Browser blocked silent audio unlock:", e));
     } catch (e) {
-      console.warn("Audio unlock failed", e);
+      console.warn("Audio Context failed", e);
     }
-    setIsShiftActive(true);
+    
+    // 2. Persist the shift state
+    startShift();
   };
 
   const handleTabChange = (tab) => {
@@ -28,7 +36,6 @@ export const AdminLayout = ({ children, activeTab, setActiveTab }) => {
   return (
     <div className="min-h-screen bg-[#f5f3ef] flex relative overflow-hidden">
       
-      {/* 1. THE AUDIO UNLOCKER OVERLAY */}
       {!isShiftActive && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1c1c1c]/80 backdrop-blur-sm p-4">
           <div className="bg-white p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-300">
@@ -49,12 +56,10 @@ export const AdminLayout = ({ children, activeTab, setActiveTab }) => {
         </div>
       )}
 
-      {/* 2. DESKTOP SIDEBAR */}
       <div className="hidden md:flex fixed inset-y-0 left-0 z-40 w-64 shadow-2xl">
         <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} />
       </div>
 
-      {/* 3. MOBILE SIDEBAR DRAWER */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-[#1c1c1c]/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-200"
@@ -75,10 +80,7 @@ export const AdminLayout = ({ children, activeTab, setActiveTab }) => {
         </button>
       </div>
 
-      {/* 4. MAIN CONTENT AREA */}
       <div className={`flex-1 md:ml-64 flex flex-col w-full min-w-0 transition-all duration-500 ${!isShiftActive ? 'blur-md pointer-events-none select-none' : ''}`}>
-        
-        {/* Top Header */}
         <header className="h-16 bg-white border-b border-[#e5e0d8] flex items-center justify-between px-4 md:px-8 sticky top-0 z-30 shrink-0">
           <div className="flex items-center gap-3">
             <button 
@@ -91,36 +93,16 @@ export const AdminLayout = ({ children, activeTab, setActiveTab }) => {
           </div>
           
           <div className="flex items-center gap-4 md:gap-6">
-            
-            {/* Notification Center */}
             <div className="relative">
               <button 
                 onClick={() => setIsNotifOpen(!isNotifOpen)}
                 className="relative p-2 text-[#8c8a86] hover:text-[#1c1c1c] transition-colors"
               >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full"></span>
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full animate-pulse"></span>
               </button>
-              
-              {isNotifOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setIsNotifOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-[#e5e0d8] rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                    <div className="px-4 py-3 border-b border-[#e5e0d8] bg-[#f5f3ef]">
-                      <h4 className="font-black text-sm text-[#1c1c1c]">Recent Alerts</h4>
-                    </div>
-                    <div className="divide-y divide-[#e5e0d8] max-h-64 overflow-y-auto">
-                      <div className="p-4 hover:bg-[#f5f3ef]/50 cursor-pointer">
-                        <p className="text-xs font-bold text-[#e25f38] mb-1">New Order Received</p>
-                        <p className="text-xs text-[#8c8a86] font-medium">Check the Live Orders queue.</p>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
             
-            {/* Profile & Quick Logout */}
             <div className="flex items-center gap-3 pl-4 md:pl-6 border-l border-[#e5e0d8]">
               <div className="w-8 h-8 bg-[#1c1c1c] text-white rounded-full flex items-center justify-center font-black text-xs shrink-0 uppercase">
                 {user?.email?.charAt(0) || 'AD'}
@@ -135,7 +117,6 @@ export const AdminLayout = ({ children, activeTab, setActiveTab }) => {
           </div>
         </header>
 
-        {/* Dynamic Page Component */}
         <main className="flex-1 p-4 md:p-8 overflow-x-hidden w-full min-w-0">
           {children}
         </main>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import Swal from 'sweetalert2';
 import { AdminLayout } from './layouts/AdminLayout';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { OrdersListScreen } from './screens/OrdersListScreen';
@@ -10,13 +11,13 @@ import { FinancialIntelScreen } from './screens/FinancialIntelScreen';
 import { MarketingScreen } from './screens/MarketingScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { useAuthStore } from './store/useAuthStore';
+import { supabase } from './lib/supabase';
 
-// Initialize the global cache engine
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // Cache stays fresh for 5 minutes
-      refetchOnWindowFocus: true, // Auto-update on tab switch
+      staleTime: 1000 * 60 * 5, 
+      refetchOnWindowFocus: true, 
     },
   },
 });
@@ -28,6 +29,48 @@ export default function App() {
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // THE OMNIPRESENT SUPABASE LISTENER & SWEETALERT ENGINE
+  useEffect(() => {
+    if (!session) return;
+
+    const channel = supabase
+      .channel('global_admin_orders')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'orders' },
+        (payload) => {
+          
+          // 1. Fire the unlocked Audio Engine
+          if (window.bbsAudioEngine) {
+            window.bbsAudioEngine.currentTime = 0;
+            window.bbsAudioEngine.play().catch(e => console.warn("Audio blocked", e));
+          }
+
+          // 2. Trigger the SweetAlert2 Toast
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'info',
+            iconColor: '#e25f38',
+            title: `New Order: #BBS-${payload.new.id.split('-')[0].toUpperCase()}`,
+            text: `${payload.new.customer_name} placed an order!`,
+            showConfirmButton: false,
+            timer: 6000,
+            timerProgressBar: true,
+            background: '#1c1c1c',
+            color: '#fff'
+          });
+
+          // 3. Silently update all TanStack Caches
+          queryClient.setQueryData(['liveOrders'], (old = []) => [payload.new, ...old]);
+          queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+        }
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [session]);
 
   if (isLoading) {
     return <div className="min-h-screen bg-[#1c1c1c]" />;
@@ -41,7 +84,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <div className="selection:bg-[#e25f38] selection:text-white font-sans antialiased">
         <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab}>
-          {activeTab === 'dashboard' && <DashboardScreen />}
+          {activeTab === 'dashboard' && <DashboardScreen setActiveTab={setActiveTab} />}
           {activeTab === 'orders' && <OrdersListScreen />}
           {activeTab === 'menu' && <MenuManagerScreen />}
           {activeTab === 'customers' && <CustomersCRM />}
