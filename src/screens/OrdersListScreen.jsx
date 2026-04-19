@@ -41,13 +41,11 @@ export const OrdersListScreen = () => {
     },
     onError: (err, variables, context) => queryClient.setQueryData(['liveOrders'], context.previous),
     onSettled: () => {
-      // Refresh both screens instantly
       queryClient.invalidateQueries({ queryKey: ['liveOrders'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
     }
   });
 
-  // SWEETALERT2 CONFIRMATION ENGINE
   const handleUpdateStatus = (id, nextStatus, label) => {
     Swal.fire({
       title: 'Confirm Action',
@@ -85,6 +83,14 @@ export const OrdersListScreen = () => {
       if (item.modifiers?.length > 0) text += ` [${item.modifiers.map(m => m.name).join(', ')}]`;
       return text;
     }).join(' • ');
+  };
+
+  // CRITICAL FIX: URL Parser to extract valid Google Maps link
+  const getCleanMapUrl = (locationString) => {
+    if (!locationString || locationString === 'Store Pickup' || locationString === 'Not Provided') return null;
+    const parts = locationString.split('|');
+    const possibleUrl = parts[parts.length - 1].trim();
+    return possibleUrl.startsWith('http') ? possibleUrl : null;
   };
 
   const filteredOrders = orders.filter(order => {
@@ -167,11 +173,17 @@ export const OrdersListScreen = () => {
                         <p className="text-xs font-bold text-[#8c8a86] uppercase tracking-widest mb-1">Customer</p>
                         <p className="font-bold text-[#1c1c1c]">{order.customer_name} <span className="text-[#8c8a86] font-medium ml-2">{order.customer_phone}</span></p>
                         <p className="text-xs font-bold text-[#e25f38] mt-1 mb-2">{order.delivery_zone}</p>
-                        {order.location_link && order.location_link !== 'Not Provided' && (
-                          <a href={order.location_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-xs font-bold">
-                            <MapPin className="w-3.5 h-3.5" /> Open in Maps
-                          </a>
-                        )}
+                        
+                        {/* CRITICAL FIX: Safe URL rendering */}
+                        {(() => {
+                          const mapUrl = getCleanMapUrl(order.location_link);
+                          return mapUrl ? (
+                            <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-xs font-bold mt-2">
+                              <MapPin className="w-3.5 h-3.5" /> Open in Maps
+                            </a>
+                          ) : null;
+                        })()}
+                        
                       </div>
                       <div>
                         <p className="text-xs font-bold text-[#8c8a86] uppercase tracking-widest mb-1">Order Items</p>

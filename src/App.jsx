@@ -41,7 +41,6 @@ export default function App() {
         { event: '*', schema: 'public', table: 'orders' },
         (payload) => {
           
-          // 1. Only fire Audio & Toast on NEW orders (INSERT)
           if (payload.eventType === 'INSERT') {
             if (window.bbsAudioEngine) {
               window.bbsAudioEngine.currentTime = 0;
@@ -59,11 +58,14 @@ export default function App() {
               timer: 6000,
               timerProgressBar: true,
               background: '#1c1c1c',
-              color: '#fff'
+              color: '#fff',
+              // CRITICAL FIX: Forces the toast above the dashboard header
+              customClass: {
+                container: 'z-[99999]'
+              }
             });
           }
 
-          // 2. ALWAYS invalidate caches on ANY change (Insert, Update, Delete)
           queryClient.invalidateQueries({ queryKey: ['liveOrders'] });
           queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
         }
