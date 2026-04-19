@@ -40,7 +40,11 @@ export const OrdersListScreen = () => {
       return { previous };
     },
     onError: (err, variables, context) => queryClient.setQueryData(['liveOrders'], context.previous),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['liveOrders'] })
+    onSettled: () => {
+      // Refresh both screens instantly
+      queryClient.invalidateQueries({ queryKey: ['liveOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+    }
   });
 
   // SWEETALERT2 CONFIRMATION ENGINE
@@ -72,7 +76,6 @@ export const OrdersListScreen = () => {
 
   const getShortId = (uuid) => `#BBS-${uuid?.split('-')[0].toUpperCase()}`;
   
-  // LUXON INTEGRATION FOR FLAWLESS TIME PARSING
   const formatTime = (dateString) => DateTime.fromISO(dateString).toFormat('h:mm a');
   
   const getItemsString = (orderItems) => {

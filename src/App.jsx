@@ -38,32 +38,33 @@ export default function App() {
       .channel('global_admin_orders')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'orders' },
+        { event: '*', schema: 'public', table: 'orders' },
         (payload) => {
           
-          // 1. Fire the unlocked Audio Engine
-          if (window.bbsAudioEngine) {
-            window.bbsAudioEngine.currentTime = 0;
-            window.bbsAudioEngine.play().catch(e => console.warn("Audio blocked", e));
+          // 1. Only fire Audio & Toast on NEW orders (INSERT)
+          if (payload.eventType === 'INSERT') {
+            if (window.bbsAudioEngine) {
+              window.bbsAudioEngine.currentTime = 0;
+              window.bbsAudioEngine.play().catch(e => console.warn("Audio blocked", e));
+            }
+
+            Swal.fire({
+              toast: true,
+              position: 'top-end',
+              icon: 'info',
+              iconColor: '#e25f38',
+              title: `New Order: #BBS-${payload.new.id.split('-')[0].toUpperCase()}`,
+              text: `${payload.new.customer_name} placed an order!`,
+              showConfirmButton: false,
+              timer: 6000,
+              timerProgressBar: true,
+              background: '#1c1c1c',
+              color: '#fff'
+            });
           }
 
-          // 2. Trigger the SweetAlert2 Toast
-          Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'info',
-            iconColor: '#e25f38',
-            title: `New Order: #BBS-${payload.new.id.split('-')[0].toUpperCase()}`,
-            text: `${payload.new.customer_name} placed an order!`,
-            showConfirmButton: false,
-            timer: 6000,
-            timerProgressBar: true,
-            background: '#1c1c1c',
-            color: '#fff'
-          });
-
-          // 3. Silently update all TanStack Caches
-          queryClient.setQueryData(['liveOrders'], (old = []) => [payload.new, ...old]);
+          // 2. ALWAYS invalidate caches on ANY change (Insert, Update, Delete)
+          queryClient.invalidateQueries({ queryKey: ['liveOrders'] });
           queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
         }
       )
