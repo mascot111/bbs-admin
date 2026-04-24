@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Banknote, CheckCircle, Clock, X, GripVertical, Trash2, Loader2, Copy, FileText, Eye, Printer, Download } from 'lucide-react';
+import { Banknote, CheckCircle, X, GripVertical, Trash2, Loader2, Copy, FileText, Printer, Download, Briefcase, Calendar as CalendarIcon, Save } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../utils/helpers'; 
@@ -7,12 +7,15 @@ import { formatCurrency } from '../utils/helpers';
 export default function CateringQuotes() {
   const queryClient = useQueryClient();
 
-  // Modal States
+  // Modal & CRM States
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
   
+  // CRM Note State
+  const [crmData, setCrmData] = useState({ admin_notes: '', follow_up_date: '' });
+
   // Itemized Quote State
   const [quoteDetails, setQuoteDetails] = useState({
     foodCost: '',
@@ -20,11 +23,12 @@ export default function CateringQuotes() {
     discount: '',
   });
 
+  // UPGRADED SALES PIPELINE COLUMNS
   const columns = [
-    { id: 'new-request', title: 'New Requests', color: 'border-blue-500', bg: 'bg-blue-500' },
-    { id: 'quoted', title: 'Awaiting Decision', color: 'border-amber-500', bg: 'bg-amber-500' },
-    { id: 'deposit-paid', title: 'Deposit Secured', color: 'border-purple-500', bg: 'bg-purple-500' },
-    { id: 'completed', title: 'Fulfilled', color: 'border-emerald-500', bg: 'bg-emerald-500' }
+    { id: 'new-request', title: 'New Lead', color: 'border-blue-500', bg: 'bg-blue-500' },
+    { id: 'negotiation', title: 'In Negotiation', color: 'border-amber-500', bg: 'bg-amber-500' },
+    { id: 'awaiting-deposit', title: 'Awaiting Deposit', color: 'border-purple-500', bg: 'bg-purple-500' },
+    { id: 'secured', title: 'Secured', color: 'border-emerald-500', bg: 'bg-emerald-500' }
   ];
 
   const { data: tickets = [], isLoading } = useQuery({
@@ -97,9 +101,24 @@ export default function CateringQuotes() {
     setIsQuoteModalOpen(true);
   };
 
-  const openDetailsModal = (ticket) => {
+  const openCRMSidebar = (ticket) => {
     setActiveTicket(ticket);
-    setIsDetailsModalOpen(true);
+    setCrmData({
+      admin_notes: ticket.admin_notes || '',
+      follow_up_date: ticket.follow_up_date || ''
+    });
+    setIsSidebarOpen(true);
+  };
+
+  const handleSaveCRM = () => {
+    updateMutation.mutate({ 
+      id: activeTicket.id, 
+      updates: { 
+        admin_notes: crmData.admin_notes, 
+        follow_up_date: crmData.follow_up_date 
+      } 
+    });
+    setIsSidebarOpen(false);
   };
 
   const openInvoiceModal = (ticket) => {
@@ -119,7 +138,8 @@ export default function CateringQuotes() {
     e.preventDefault();
     const total = calculateGrandTotal();
     if (total <= 0) return;
-    updateMutation.mutate({ id: activeTicket.id, updates: { total: total, status: 'quoted' } });
+    // Moves to Awaiting Deposit pipeline automatically
+    updateMutation.mutate({ id: activeTicket.id, updates: { total: total, status: 'awaiting-deposit' } });
     setIsQuoteModalOpen(false);
   };
 
@@ -131,6 +151,33 @@ export default function CateringQuotes() {
       title: parts[0],
       details: parts[1] || null
     };
+  };
+
+  const generateProposalText = (ticket) => {
+    const total = calculateGrandTotal() || ticket.total;
+    const formattedDishesList = Array.isArray(ticket.dishes) 
+      ? ticket.dishes.map(d => {
+          const parsed = parseDishString(d);
+          return `• *${parsed.title}*\n  _${parsed.details || ''}_`;
+        }).join('\n\n') 
+      : ticket.dishes;
+
+    const text = `*OFFICIAL PROPOSAL: BIGG BRODASS STOPOVER* 🍽️\n\n`
+      + `*Client:* ${ticket.customer}\n`
+      + `*Event:* ${ticket.event}\n\n`
+      + `*Menu Selection:*\n`
+      + `${formattedDishesList}\n\n`
+      + `*Financial Breakdown:*\n`
+      + `Food & Beverage: GHS ${quoteDetails.foodCost || 'TBD'}\n`
+      + `Logistics & Setup (10%): GHS ${quoteDetails.logistics || 'TBD'}\n`
+      + (Number(quoteDetails.discount) > 0 ? `Applied Discount: -GHS ${quoteDetails.discount}\n` : '')
+      + `--------------------------\n`
+      + `*Grand Total: ${formatCurrency(total)}*\n\n`
+      + `*Terms:* A 50% deposit is required to secure your booking date. Please review and let us know if you have any modifications.\n\n`
+      + `Thank you for choosing B.B.S Eats!`;
+      
+    navigator.clipboard.writeText(text);
+    alert("Professional proposal copied to clipboard. Ready to paste in WhatsApp/Email.");
   };
 
   const getColumnTotal = (statusId) => {
@@ -150,11 +197,9 @@ export default function CateringQuotes() {
 
   return (
     <>
-      {/* ------------------------------------------------------------- */}
-      {/* THE ADMIN DASHBOARD (HIDDEN DURING PDF PRINTING)              */}
-      {/* ------------------------------------------------------------- */}
       <div className="max-w-full mx-auto space-y-6 overflow-hidden h-[calc(100vh-8rem)] flex flex-col print:hidden">
         
+        {/* PIPELINE METRICS */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4 shrink-0 w-full">
           <div>
             <p className="text-[#8c8a86] font-bold text-xs uppercase tracking-wider mb-1">Corporate & Events CRM</p>
@@ -163,16 +208,17 @@ export default function CateringQuotes() {
           <div className="bg-[#1c1c1c] w-full md:w-auto px-5 py-3 rounded-xl shadow-lg flex justify-between md:justify-start gap-4 md:gap-6 text-sm font-bold text-white">
             <div className="flex flex-col">
               <span className="text-[#8c8a86] text-[10px] md:text-xs uppercase tracking-widest">Active Pipeline</span>
-              <span className="text-lg">{formatCurrency(getColumnTotal('quoted') + getColumnTotal('deposit-paid'))}</span>
+              <span className="text-lg">{formatCurrency(getColumnTotal('negotiation') + getColumnTotal('awaiting-deposit'))}</span>
             </div>
             <div className="w-px bg-white/20"></div>
             <div className="flex flex-col items-end md:items-start">
               <span className="text-[#8c8a86] text-[10px] md:text-xs uppercase tracking-widest">Closed Won</span>
-              <span className="text-emerald-400 text-lg">{formatCurrency(getColumnTotal('completed'))}</span>
+              <span className="text-emerald-400 text-lg">{formatCurrency(getColumnTotal('secured'))}</span>
             </div>
           </div>
         </div>
 
+        {/* KANBAN BOARD */}
         <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 flex-1 items-start snap-x snap-mandatory">
           {columns.map((column) => (
             <div 
@@ -210,7 +256,14 @@ export default function CateringQuotes() {
                         </div>
 
                         <h4 className="font-black text-[#1c1c1c] mb-1 pr-6">{ticket.customer}</h4>
-                        <p className="text-xs font-bold text-[#e25f38] mb-4 uppercase tracking-wider">{ticket.event}</p>
+                        <p className="text-xs font-bold text-[#e25f38] mb-3 uppercase tracking-wider">{ticket.event}</p>
+                        
+                        {/* CRM Badge Flag */}
+                        {ticket.follow_up_date && (
+                          <div className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider mb-3 border border-amber-200">
+                            <CalendarIcon className="w-3 h-3" /> Follow up: {new Date(ticket.follow_up_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          </div>
+                        )}
                         
                         <div className="text-sm text-[#8c8a86] mb-4 space-y-3">
                           <ul className="space-y-1 font-medium">
@@ -237,8 +290,8 @@ export default function CateringQuotes() {
                             <button onClick={() => openQuoteModal(ticket)} className="p-2 text-[#8c8a86] hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors" title="Manage Proposal Price">
                               <Banknote className="w-4 h-4" />
                             </button>
-                            <button onClick={() => openDetailsModal(ticket)} className="p-2 text-[#8c8a86] hover:bg-[#1c1c1c] hover:text-white rounded-lg transition-colors" title="View Full Details">
-                              <Eye className="w-4 h-4" />
+                            <button onClick={() => openCRMSidebar(ticket)} className="p-2 text-[#8c8a86] hover:bg-[#1c1c1c] hover:text-white rounded-lg transition-colors" title="Open CRM Workspace">
+                              <Briefcase className="w-4 h-4" />
                             </button>
                             <button onClick={() => deleteMutation.mutate(ticket.id)} className="p-2 text-[#8c8a86] hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors" title="Delete Lead">
                               <Trash2 className="w-4 h-4" />
@@ -255,10 +308,96 @@ export default function CateringQuotes() {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* MODALS (HIDDEN DURING PRINTING)                               */}
+      {/* 1. GLASSMORPHIC CRM SIDEBAR                                   */}
       {/* ------------------------------------------------------------- */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-[#1c1c1c]/50 backdrop-blur-sm print:hidden">
+          <div className="absolute inset-0" onClick={() => setIsSidebarOpen(false)}></div>
+          
+          <div className="w-full max-w-md bg-[#fdfbf7] h-full shadow-2xl relative flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="px-6 py-5 border-b border-[#e5e0d8] flex justify-between items-center bg-white shrink-0">
+              <div>
+                <h3 className="font-black text-xl text-[#1c1c1c]">Lead CRM</h3>
+                <p className="text-sm font-bold text-[#8c8a86]">{activeTicket?.customer}</p>
+              </div>
+              <button onClick={() => setIsSidebarOpen(false)} className="text-[#8c8a86] hover:text-[#1c1c1c] transition-colors p-2 bg-[#f5f3ef] rounded-full shadow-sm border border-[#e5e0d8]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-      {/* DRAFT QUOTE MODAL */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              
+              {/* Internal Action Fields */}
+              <div className="space-y-4 bg-white p-5 rounded-2xl border border-[#e5e0d8] shadow-sm">
+                <div>
+                  <label className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <CalendarIcon className="w-3.5 h-3.5 text-[#e25f38]" /> Next Follow-Up Date
+                  </label>
+                  <input 
+                    type="date" 
+                    value={crmData.follow_up_date} 
+                    onChange={(e) => setCrmData({...crmData, follow_up_date: e.target.value})}
+                    className="w-full bg-[#f5f3ef] border border-[#e5e0d8] focus:border-[#e25f38] rounded-xl p-3 font-bold text-[#1c1c1c] outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-widest mb-2 block">Internal Admin Notes</label>
+                  <textarea 
+                    value={crmData.admin_notes} 
+                    onChange={(e) => setCrmData({...crmData, admin_notes: e.target.value})}
+                    placeholder="Record negotiation details, budget constraints, or competitor quotes here..."
+                    className="w-full bg-[#f5f3ef] border border-[#e5e0d8] focus:border-[#e25f38] rounded-xl p-3 font-bold text-[#1c1c1c] outline-none transition-colors min-h-[120px] resize-none"
+                  />
+                </div>
+                <button 
+                  onClick={handleSaveCRM}
+                  className="w-full py-3.5 bg-[#1c1c1c] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-black transition-colors shadow-lg active:scale-95 mt-2"
+                >
+                  <Save className="w-4 h-4" /> Save CRM Data
+                </button>
+              </div>
+
+              {/* Read-Only Lead Data */}
+              <div>
+                <h4 className="text-[10px] font-black text-[#8c8a86] uppercase tracking-widest mb-3 ml-1">Client Request Data</h4>
+                <div className="bg-white border border-[#e5e0d8] rounded-2xl p-5 space-y-5 shadow-sm">
+                  <div>
+                    <p className="text-[10px] font-bold text-[#8c8a86] uppercase">Event Type</p>
+                    <p className="font-black text-[#1c1c1c] text-lg">{activeTicket?.event}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-[10px] font-bold text-[#8c8a86] uppercase mb-2">Requested Menu</p>
+                    <ul className="space-y-3">
+                      {Array.isArray(activeTicket?.dishes) ? activeTicket.dishes.map((dish, i) => {
+                        const parsed = parseDishString(dish);
+                        return (
+                          <li key={i} className="text-sm bg-[#f5f3ef] p-3 rounded-xl border border-[#e5e0d8]">
+                            <span className="font-black text-[#1c1c1c] block mb-1">{parsed.title}</span>
+                            {parsed.details && <span className="text-xs font-bold text-[#8c8a86] leading-relaxed block">{parsed.details}</span>}
+                          </li>
+                        );
+                      }) : (
+                        <li className="text-sm font-bold text-[#1c1c1c] bg-[#f5f3ef] p-3 rounded-xl border border-[#e5e0d8]">{activeTicket?.dishes}</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-bold text-[#8c8a86] uppercase mb-2">Customer Notes & Logistics</p>
+                    <pre className="whitespace-pre-wrap font-medium text-[#1c1c1c] font-sans text-xs leading-relaxed bg-[#f5f3ef] p-4 rounded-xl border border-[#e5e0d8]">
+                      {activeTicket?.notes || 'No additional notes provided.'}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. DRAFT QUOTE MODAL */}
       {isQuoteModalOpen && (
         <div className="fixed inset-0 bg-[#1c1c1c]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -275,7 +414,7 @@ export default function CateringQuotes() {
             <form onSubmit={submitQuote} className="p-6">
               <div className="space-y-4 mb-8">
                 <div>
-                  <label className="block text-xs font-bold text-[#8c8a86] mb-1 uppercase tracking-widest">Base Food & Beverage</label>
+                  <label className="block text-[10px] font-black text-[#8c8a86] mb-1 uppercase tracking-widest">Base Food & Beverage</label>
                   <div className="relative">
                     <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-[#8c8a86] font-bold">GHS</span>
                     <input type="number" required value={quoteDetails.foodCost} onChange={(e) => setQuoteDetails({...quoteDetails, foodCost: e.target.value})} className="w-full pl-14 pr-4 py-3 bg-[#f5f3ef] border border-[#e5e0d8] rounded-xl font-black text-[#1c1c1c] outline-none focus:border-[#e25f38] transition-colors" placeholder="0.00" />
@@ -284,14 +423,14 @@ export default function CateringQuotes() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-[#8c8a86] mb-1 uppercase tracking-widest">Logistics (10%)</label>
+                    <label className="block text-[10px] font-black text-[#8c8a86] mb-1 uppercase tracking-widest">Logistics (10%)</label>
                     <div className="relative">
                       <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-[#8c8a86] font-bold">GHS</span>
                       <input type="number" required value={quoteDetails.logistics} onChange={(e) => setQuoteDetails({...quoteDetails, logistics: e.target.value})} className="w-full pl-14 pr-4 py-3 bg-[#f5f3ef] border border-[#e5e0d8] rounded-xl font-black text-[#1c1c1c] outline-none focus:border-[#e25f38] transition-colors" placeholder="0.00" />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-[#8c8a86] mb-1 uppercase tracking-widest">Discount</label>
+                    <label className="block text-[10px] font-black text-[#8c8a86] mb-1 uppercase tracking-widest">Discount</label>
                     <div className="relative">
                       <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-[#8c8a86] font-bold">GHS</span>
                       <input type="number" value={quoteDetails.discount} onChange={(e) => setQuoteDetails({...quoteDetails, discount: e.target.value})} className="w-full pl-14 pr-4 py-3 bg-[#f5f3ef] border border-[#e5e0d8] rounded-xl font-black text-[#1c1c1c] outline-none focus:border-[#e25f38] transition-colors" placeholder="0.00" />
@@ -318,64 +457,7 @@ export default function CateringQuotes() {
         </div>
       )}
 
-      {/* LEAD DETAILS MODAL OVERLAY */}
-      {isDetailsModalOpen && (
-        <div className="fixed inset-0 bg-[#1c1c1c]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            <div className="px-6 py-5 border-b border-[#e5e0d8] flex justify-between items-center bg-[#fdfbf7] shrink-0">
-              <div>
-                <h3 className="font-black text-xl text-[#1c1c1c]">Lead Details</h3>
-                <p className="text-sm font-bold text-[#8c8a86]">{activeTicket?.customer}</p>
-              </div>
-              <button onClick={() => setIsDetailsModalOpen(false)} className="text-[#8c8a86] hover:text-[#1c1c1c] transition-colors p-2 bg-white rounded-full shadow-sm border border-[#e5e0d8]">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-8 flex-1">
-              <div>
-                <h4 className="text-xs font-bold text-[#8c8a86] uppercase tracking-widest mb-2">Event Information</h4>
-                <p className="font-black text-[#1c1c1c] text-xl">{activeTicket?.event}</p>
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-[#8c8a86] uppercase tracking-widest mb-3">Menu Selection</h4>
-                <ul className="space-y-3">
-                  {Array.isArray(activeTicket?.dishes) ? activeTicket.dishes.map((dish, i) => {
-                    const parsed = parseDishString(dish);
-                    return (
-                      <li key={i} className="flex items-start gap-3 bg-[#f5f3ef] p-4 rounded-xl border border-[#e5e0d8]">
-                        <CheckCircle className="w-5 h-5 text-[#e25f38] shrink-0 mt-0.5" />
-                        <div>
-                          <span className="font-black text-[#1c1c1c] block">{parsed.title}</span>
-                          {parsed.details && (
-                            <span className="text-xs font-bold text-[#8c8a86] block mt-1 leading-relaxed">
-                              {parsed.details}
-                            </span>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  }) : (
-                    <li className="bg-[#f5f3ef] p-4 rounded-xl font-bold text-[#1c1c1c] border border-[#e5e0d8]">
-                      {activeTicket?.dishes}
-                    </li>
-                  )}
-                </ul>
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-[#8c8a86] uppercase tracking-widest mb-3">CRM Notes & Contacts</h4>
-                <div className="bg-[#f5f3ef] p-5 rounded-xl border border-[#e5e0d8]">
-                  <pre className="whitespace-pre-wrap font-bold text-[#1c1c1c] font-sans text-sm leading-relaxed">
-                    {activeTicket?.notes || 'No additional notes provided.'}
-                  </pre>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PDF GENERATOR MODAL UI */}
+      {/* 3. PDF GENERATOR MODAL UI */}
       {isInvoiceModalOpen && (
         <div className="fixed inset-0 bg-[#1c1c1c]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-8 text-center">
@@ -405,14 +487,11 @@ export default function CateringQuotes() {
         </div>
       )}
 
-
       {/* ------------------------------------------------------------- */}
       {/* THE HIDDEN PRINTABLE INVOICE (ONLY VISIBLE DURING PRINT)      */}
       {/* ------------------------------------------------------------- */}
       {activeTicket && (
         <div className="hidden print:block absolute inset-0 bg-white z-[99999] min-h-screen text-black">
-          
-          {/* Header */}
           <div className="flex justify-between items-start border-b-2 border-gray-200 pb-8 mb-8">
              <div>
                <h1 className="text-4xl font-black text-[#e25f38] mb-1 tracking-tighter">B.B.S Eats.</h1>
@@ -429,13 +508,11 @@ export default function CateringQuotes() {
              </div>
           </div>
 
-          {/* Client & Event Details */}
           <div className="grid grid-cols-2 gap-12 mb-12">
             <div>
               <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Billed To</p>
               <p className="text-xl font-black text-gray-800">{activeTicket.customer}</p>
               <p className="text-sm font-semibold text-gray-600 mt-2 whitespace-pre-wrap">
-                {/* Extracts just the Primary Contact/Phone from the notes */}
                 {activeTicket.notes.split('---')[1]?.trim() || 'Details on file'}
               </p>
             </div>
@@ -453,7 +530,6 @@ export default function CateringQuotes() {
             </div>
           </div>
 
-          {/* Line Items Table */}
           <table className="w-full mb-8 text-left border-collapse">
             <thead>
               <tr className="border-b-2 border-gray-800">
@@ -470,25 +546,18 @@ export default function CateringQuotes() {
                       <p className="font-black text-gray-800 text-lg mb-1">{parsed.title}</p>
                       <p className="text-sm font-semibold text-gray-500 leading-relaxed">{parsed.details}</p>
                     </td>
-                    <td className="py-6 text-right font-black text-gray-800 text-lg align-top pt-7">
-                       —
-                    </td>
+                    <td className="py-6 text-right font-black text-gray-800 text-lg align-top pt-7"> — </td>
                   </tr>
                 );
               }) : (
                 <tr>
-                  <td className="py-6 pr-8">
-                    <p className="font-black text-gray-800 text-lg">{activeTicket.dishes}</p>
-                  </td>
-                  <td className="py-6 text-right font-black text-gray-800 text-lg align-top">
-                     —
-                  </td>
+                  <td className="py-6 pr-8"><p className="font-black text-gray-800 text-lg">{activeTicket.dishes}</p></td>
+                  <td className="py-6 text-right font-black text-gray-800 text-lg align-top"> — </td>
                 </tr>
               )}
             </tbody>
           </table>
 
-          {/* Totals Section */}
           <div className="flex justify-end mb-16">
             <div className="w-1/2">
               <div className="flex justify-between py-3 border-b border-gray-200 text-sm font-semibold text-gray-600">
@@ -506,22 +575,18 @@ export default function CateringQuotes() {
             </div>
           </div>
 
-          {/* Footer & Payment Details */}
           <div className="border-t border-gray-200 pt-8 flex justify-between">
             <div className="w-1/2 pr-8">
               <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Payment Instructions</p>
               <p className="text-sm font-semibold text-gray-600 mb-1">MTN Mobile Money: <span className="font-black text-gray-800">024 228 6269</span></p>
               <p className="text-sm font-semibold text-gray-600">Name: <span className="font-black text-gray-800">MAXWEL YAW AHENKORAH</span></p>
-              <p className="text-xs font-medium text-gray-500 italic mt-4">
-                * A 50% non-refundable deposit is required to secure the event date.
-              </p>
+              <p className="text-xs font-medium text-gray-500 italic mt-4">* A 50% non-refundable deposit is required to secure the event date.</p>
             </div>
             <div className="w-1/2 flex flex-col items-end justify-end">
               <div className="w-48 border-b-2 border-gray-800 mb-2"></div>
               <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Authorized Signature</p>
             </div>
           </div>
-          
         </div>
       )}
     </>
