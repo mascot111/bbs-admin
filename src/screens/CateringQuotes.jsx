@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Banknote, CheckCircle, X, GripVertical, Trash2, Loader2, Copy, FileText, Printer, Download, Briefcase, Calendar as CalendarIcon, Save, Circle, AlertCircle } from 'lucide-react';
+import { Banknote, X, GripVertical, Trash2, Loader2, FileText, Printer, Download, Briefcase, Calendar as CalendarIcon, Save, AlertCircle, Eye, Check } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { formatCurrency } from '../utils/helpers'; // CRITICAL FIX: Consistency
+import { formatCurrency } from '../utils/helpers';
 
 export default function CateringQuotes() {
   const queryClient = useQueryClient();
@@ -10,16 +10,18 @@ export default function CateringQuotes() {
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
   
   const [crmData, setCrmData] = useState({ admin_notes: '', follow_up_date: '' });
   const [quoteDetails, setQuoteDetails] = useState({ foodCost: '', logistics: '', discount: '' });
 
+  // REVERTED TO THE VIBRANT STARTUP UI
   const columns = [
-    { id: 'new-request', title: 'New Leads', dot: 'text-blue-500' },
-    { id: 'negotiation', title: 'In Negotiation', dot: 'text-amber-500' },
-    { id: 'awaiting-deposit', title: 'Awaiting Deposit', dot: 'text-purple-500' },
-    { id: 'secured', title: 'Secured Contracts', dot: 'text-emerald-500' }
+    { id: 'new-request', title: 'New Leads', color: 'border-blue-500', bg: 'bg-blue-500' },
+    { id: 'negotiation', title: 'In Negotiation', color: 'border-amber-500', bg: 'bg-amber-500' },
+    { id: 'awaiting-deposit', title: 'Awaiting Deposit', color: 'border-purple-500', bg: 'bg-purple-500' },
+    { id: 'secured', title: 'Secured Contracts', color: 'border-emerald-500', bg: 'bg-emerald-500' }
   ];
 
   const { data: tickets = [], isLoading } = useQuery({
@@ -81,6 +83,11 @@ export default function CateringQuotes() {
     setIsSidebarOpen(true);
   };
 
+  const openDetailsModal = (ticket) => {
+    setActiveTicket(ticket);
+    setIsDetailsModalOpen(true);
+  };
+
   const openInvoiceModal = (ticket) => {
     if (!ticket.total) return alert("You must assign a price in 'Manage Proposal' before generating an invoice.");
     setActiveTicket(ticket);
@@ -98,52 +105,56 @@ export default function CateringQuotes() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] print:hidden">
-        <Loader2 className="w-6 h-6 animate-spin text-gray-400 mb-4" />
-        <p className="text-sm font-medium text-gray-500">Loading Enterprise Pipeline...</p>
+        <Loader2 className="w-8 h-8 animate-spin text-[#e25f38] mb-4" />
+        <p className="font-bold text-[#8c8a86]">Loading B2B pipeline...</p>
       </div>
     );
   }
 
   return (
     <>
-      <div className="max-w-full mx-auto flex flex-col h-[calc(100vh-8rem)] print:hidden bg-gray-50 -m-4 md:-m-8 p-4 md:p-8">
+      <div className="max-w-full mx-auto space-y-6 overflow-hidden h-[calc(100vh-8rem)] flex flex-col print:hidden">
         
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-6 shrink-0 w-full border-b border-gray-200 pb-6">
+        {/* REVERTED: Vibrant Dashboard Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4 shrink-0 w-full">
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900 tracking-tight">Catering Pipeline</h2>
-            <p className="text-sm text-gray-500 mt-1">Manage B2B leads, negotiations, and event contracts.</p>
+            <p className="text-[#8c8a86] font-bold text-xs uppercase tracking-wider mb-1">Corporate & Events CRM</p>
+            <h2 className="text-3xl font-black text-[#1c1c1c] leading-none">Catering Pipeline</h2>
           </div>
-          <div className="flex gap-8 text-sm">
-            <div>
-              <p className="text-gray-500 font-medium mb-1">Active Pipeline</p>
-              <p className="text-xl font-semibold text-gray-900">{formatCurrency(getColumnTotal('negotiation') + getColumnTotal('awaiting-deposit'))}</p>
+          <div className="bg-[#1c1c1c] w-full md:w-auto px-5 py-3 rounded-xl shadow-lg flex justify-between md:justify-start gap-4 md:gap-6 text-sm font-bold text-white">
+            <div className="flex flex-col">
+              <span className="text-[#8c8a86] text-[10px] md:text-xs uppercase tracking-widest">Active Pipeline</span>
+              <span className="text-lg">{formatCurrency(getColumnTotal('negotiation') + getColumnTotal('awaiting-deposit'))}</span>
             </div>
-            <div className="w-px bg-gray-200"></div>
-            <div>
-              <p className="text-gray-500 font-medium mb-1">Closed Won</p>
-              <p className="text-xl font-semibold text-emerald-600">{formatCurrency(getColumnTotal('secured'))}</p>
+            <div className="w-px bg-white/20"></div>
+            <div className="flex flex-col items-end md:items-start">
+              <span className="text-[#8c8a86] text-[10px] md:text-xs uppercase tracking-widest">Closed Won</span>
+              <span className="text-emerald-400 text-lg">{formatCurrency(getColumnTotal('secured'))}</span>
             </div>
           </div>
         </div>
 
-        <div className="flex gap-4 overflow-x-auto pb-4 flex-1 items-start no-scrollbar">
+        {/* REVERTED: Kanban Board UI */}
+        <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 flex-1 items-start snap-x snap-mandatory hide-scrollbar">
           {columns.map((column) => (
             <div 
               key={column.id} 
-              className="bg-gray-100/50 rounded-lg min-w-[320px] max-w-[320px] flex flex-col h-full border border-gray-200 overflow-hidden shrink-0"
+              className="bg-[#e5e0d8]/30 rounded-2xl min-w-[300px] md:min-w-[340px] max-w-[300px] md:max-w-[340px] flex flex-col h-full max-h-full border border-[#e5e0d8]/50 overflow-hidden snap-center shrink-0"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, column.id)}
             >
-              <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center bg-gray-50/80">
+              <div className="p-4 border-b border-[#e5e0d8] flex justify-between items-center bg-[#f5f3ef] shrink-0">
                 <div className="flex items-center gap-2">
-                  <Circle className={`w-2.5 h-2.5 fill-current ${column.dot}`} />
-                  <h3 className="text-sm font-semibold text-gray-700">{column.title}</h3>
-                  <span className="bg-gray-200 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full ml-1">{tickets.filter(t => t.status === column.id).length}</span>
+                  <div className={`w-3 h-3 rounded-full ${column.bg}`}></div>
+                  <h3 className="text-md font-bold text-[#1c1c1c] tracking-wide">{column.title}</h3>
                 </div>
-                <span className="text-xs font-semibold text-gray-500">{formatCurrency(getColumnTotal(column.id))}</span>
+                <div className="flex flex-col items-end">
+                  <span className="text-[#1c1c1c] font-black">{formatCurrency(getColumnTotal(column.id))}</span>
+                  <span className="text-[#8c8a86] text-xs font-bold">{tickets.filter(t => t.status === column.id).length} Leads</span>
+                </div>
               </div>
 
-              <div className="p-3 flex flex-col gap-3 overflow-y-auto flex-1">
+              <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
                 {tickets.filter((ticket) => ticket.status === column.id).map((ticket) => {
                   const dishesList = Array.isArray(ticket.dishes) ? ticket.dishes : [];
 
@@ -152,37 +163,45 @@ export default function CateringQuotes() {
                       key={ticket.id} 
                       draggable
                       onDragStart={(e) => handleDragStart(e, ticket.id)}
-                      className="bg-white rounded-md p-4 shadow-sm border border-gray-200 hover:shadow transition-shadow cursor-grab active:cursor-grabbing group relative"
+                      className={`bg-white rounded-xl p-5 shadow-sm border-l-4 ${column.color} hover:shadow-md transition-all cursor-grab active:cursor-grabbing group relative`}
                     >
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-semibold text-gray-900 text-sm leading-tight pr-6 truncate">{ticket.customer}</h4>
-                        <GripVertical className="w-4 h-4 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity absolute right-3 top-4" />
+                      <div className="absolute right-3 top-4 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <GripVertical className="w-5 h-5" />
                       </div>
-                      
-                      <p className="text-xs font-medium text-gray-500 mb-3">{ticket.event}</p>
+
+                      <h4 className="font-black text-[#1c1c1c] mb-1 pr-6">{ticket.customer}</h4>
+                      <p className="text-xs font-bold text-[#e25f38] mb-3 uppercase tracking-wider">{ticket.event}</p>
                       
                       {ticket.follow_up_date && (
-                        <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded text-[10px] font-semibold uppercase tracking-wider mb-3">
+                        <div className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider mb-3 border border-amber-200">
                           <CalendarIcon className="w-3 h-3" /> Follow up: {new Date(ticket.follow_up_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                         </div>
                       )}
                       
-                      <div className="text-xs text-gray-600 mb-4 space-y-1 border-l-2 border-gray-200 pl-2">
-                        {dishesList.slice(0, 2).map((dish, index) => (
-                          <p key={index} className="truncate">{parseDishString(dish).title}</p>
-                        ))}
-                        {dishesList.length > 2 && <p className="text-gray-400 italic">+{dishesList.length - 2} more items</p>}
+                      <div className="text-sm text-[#8c8a86] mb-4 space-y-3">
+                        <ul className="space-y-1 font-medium">
+                          {dishesList.slice(0, 2).map((dish, index) => {
+                            const parsed = parseDishString(dish);
+                            return (
+                              <li key={index} className="truncate before:content-['•'] before:mr-2 before:text-[#e25f38]">
+                                {parsed.title}
+                              </li>
+                            );
+                          })}
+                          {dishesList.length > 2 && <li className="text-xs italic pl-4">+ {dishesList.length - 2} more items</li>}
+                        </ul>
                       </div>
                       
-                      <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-                        <div className="font-semibold text-gray-900 text-sm">
-                          {ticket.total ? formatCurrency(ticket.total) : <span className="text-gray-400 text-xs font-medium italic flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Pricing Pending</span>}
+                      <div className="flex justify-between items-center mt-5 pt-4 border-t border-[#e5e0d8]">
+                        <div className="font-black text-[#1c1c1c]">
+                          {ticket.total ? formatCurrency(ticket.total) : <span className="text-[#8c8a86] text-sm flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5"/> Pricing Pending</span>}
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => openInvoiceModal(ticket)} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-emerald-600 rounded transition-colors" title="Download PDF Invoice"><Download className="w-4 h-4" /></button>
-                          <button onClick={() => openQuoteModal(ticket)} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600 rounded transition-colors" title="Manage Price"><Banknote className="w-4 h-4" /></button>
-                          <button onClick={() => openCRMSidebar(ticket)} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-900 rounded transition-colors" title="Open CRM"><Briefcase className="w-4 h-4" /></button>
-                          <button onClick={() => deleteMutation.mutate(ticket.id)} className="p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => openDetailsModal(ticket)} className="p-2 text-[#8c8a86] hover:bg-[#1c1c1c] hover:text-white rounded-lg transition-colors" title="View Full Details"><Eye className="w-4 h-4" /></button>
+                          <button onClick={() => openInvoiceModal(ticket)} className="p-2 text-[#8c8a86] hover:bg-emerald-50 hover:text-emerald-600 rounded-lg transition-colors" title="Download PDF Invoice"><Download className="w-4 h-4" /></button>
+                          <button onClick={() => openQuoteModal(ticket)} className="p-2 text-[#8c8a86] hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors" title="Manage Price"><Banknote className="w-4 h-4" /></button>
+                          <button onClick={() => openCRMSidebar(ticket)} className="p-2 text-[#8c8a86] hover:bg-[#1c1c1c] hover:text-white rounded-lg transition-colors" title="Open CRM"><Briefcase className="w-4 h-4" /></button>
+                          <button onClick={() => deleteMutation.mutate(ticket.id)} className="p-2 text-[#8c8a86] hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
                     </div>
@@ -194,85 +213,55 @@ export default function CateringQuotes() {
         </div>
       </div>
 
-      {isSidebarOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-gray-900/20 backdrop-blur-sm print:hidden">
-          <div className="absolute inset-0" onClick={() => setIsSidebarOpen(false)}></div>
-          
-          <div className="w-full max-w-md bg-white h-full shadow-2xl relative flex flex-col animate-in slide-in-from-right duration-200 border-l border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50 shrink-0">
+      {/* NEW: THE EXACT LEAD DETAILS UI FROM THE UPLOADED SCREENSHOT */}
+      {isDetailsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1c1c1c]/50 backdrop-blur-sm print:hidden">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-[380px] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            
+            <div className="px-6 py-6 border-b border-[#e5e0d8] flex justify-between items-start bg-[#fdfbf7] shrink-0">
               <div>
-                <h3 className="font-semibold text-lg text-gray-900">Lead CRM</h3>
-                <p className="text-sm text-gray-500">{activeTicket?.customer}</p>
+                <h3 className="font-black text-xl text-[#1c1c1c]">Lead Details</h3>
+                <p className="text-sm font-bold text-[#8c8a86]">{activeTicket?.customer}</p>
               </div>
-              <button onClick={() => setIsSidebarOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors p-1.5 hover:bg-gray-100 rounded-md">
+              <button onClick={() => setIsDetailsModalOpen(false)} className="text-[#8c8a86] hover:text-[#1c1c1c] transition-colors p-2 bg-white rounded-full shadow-sm border border-[#e5e0d8]">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1 space-y-8">
+            <div className="p-6 overflow-y-auto space-y-8 flex-1">
               
               <div>
-                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Admin Actions</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">Next Follow-Up Date</label>
-                    <input 
-                      type="date" 
-                      value={crmData.follow_up_date} 
-                      onChange={(e) => setCrmData({...crmData, follow_up_date: e.target.value})}
-                      className="w-full bg-white border border-gray-300 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 rounded-md p-2.5 text-sm text-gray-900 outline-none transition-all shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">Internal Negotiation Notes</label>
-                    <textarea 
-                      value={crmData.admin_notes} 
-                      onChange={(e) => setCrmData({...crmData, admin_notes: e.target.value})}
-                      placeholder="Record budget constraints, contact attempts, or custom requests here..."
-                      className="w-full bg-white border border-gray-300 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 rounded-md p-3 text-sm text-gray-900 outline-none transition-all min-h-[120px] resize-none shadow-sm"
-                    />
-                  </div>
-                  <button 
-                    onClick={() => {
-                      updateMutation.mutate({ id: activeTicket.id, updates: { admin_notes: crmData.admin_notes, follow_up_date: crmData.follow_up_date } });
-                      setIsSidebarOpen(false);
-                    }}
-                    className="w-full py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-md hover:bg-black transition-colors shadow-sm"
-                  >
-                    Save CRM Data
-                  </button>
+                <h4 className="text-[10px] font-black text-[#8c8a86] uppercase tracking-widest mb-1">Event Information</h4>
+                <p className="font-black text-[#1c1c1c] text-xl leading-tight">{activeTicket?.event}</p>
+              </div>
+              
+              <div>
+                <h4 className="text-[10px] font-black text-[#8c8a86] uppercase tracking-widest mb-3">Menu Selection</h4>
+                <div className="space-y-3">
+                  {Array.isArray(activeTicket?.dishes) ? activeTicket.dishes.map((dish, i) => {
+                    const parsed = parseDishString(dish);
+                    return (
+                      <div key={i} className="flex items-center gap-3 bg-[#fdfbf7] border border-[#e5e0d8] p-4 rounded-2xl shadow-sm">
+                        <div className="w-6 h-6 rounded-full border-[1.5px] border-[#e25f38] flex items-center justify-center shrink-0">
+                          <Check className="w-3.5 h-3.5 text-[#e25f38] stroke-[3]" />
+                        </div>
+                        <span className="font-bold text-[#1c1c1c] text-[13px]">{parsed.title}</span>
+                      </div>
+                    );
+                  }) : (
+                    <div className="flex items-center gap-3 bg-[#fdfbf7] border border-[#e5e0d8] p-4 rounded-2xl shadow-sm">
+                      <span className="font-bold text-[#1c1c1c] text-[13px]">{activeTicket?.dishes}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 pt-6">
-                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Original Request Data</h4>
-                <div className="space-y-6">
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-1">Event Type</p>
-                    <p className="text-sm font-medium text-gray-900">{activeTicket?.event}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-2">Requested Menu</p>
-                    <ul className="space-y-2">
-                      {Array.isArray(activeTicket?.dishes) ? activeTicket.dishes.map((dish, i) => {
-                        const parsed = parseDishString(dish);
-                        return (
-                          <li key={i} className="text-sm bg-gray-50 p-3 rounded-md border border-gray-100">
-                            <span className="font-semibold text-gray-900 block mb-1">{parsed.title}</span>
-                            {parsed.details && <span className="text-xs text-gray-500 block">{parsed.details}</span>}
-                          </li>
-                        );
-                      }) : (
-                        <li className="text-sm text-gray-900 bg-gray-50 p-3 rounded-md border border-gray-100">{activeTicket?.dishes}</li>
-                      )}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-2">Customer Logistics & Contacts</p>
-                    <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 bg-gray-50 p-4 rounded-md border border-gray-100 leading-relaxed">
-                      {activeTicket?.notes || 'No additional notes provided.'}
-                    </pre>
-                  </div>
+              <div>
+                <h4 className="text-[10px] font-black text-[#8c8a86] uppercase tracking-widest mb-3">CRM Notes & Contacts</h4>
+                <div className="bg-[#fdfbf7] border border-[#e5e0d8] p-5 rounded-2xl shadow-sm">
+                  <pre className="whitespace-pre-wrap font-bold text-[#1c1c1c] font-sans text-[13px] leading-relaxed">
+                    {activeTicket?.notes || 'No additional details provided.'}
+                  </pre>
                 </div>
               </div>
 
@@ -281,69 +270,136 @@ export default function CateringQuotes() {
         </div>
       )}
 
+      {/* REVERTED: CRM Slide-Over Workspace */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-[#1c1c1c]/50 backdrop-blur-sm print:hidden">
+          <div className="absolute inset-0" onClick={() => setIsSidebarOpen(false)}></div>
+          
+          <div className="w-full max-w-md bg-[#fdfbf7] h-full shadow-2xl relative flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="px-6 py-5 border-b border-[#e5e0d8] flex justify-between items-center bg-white shrink-0">
+              <div>
+                <h3 className="font-black text-xl text-[#1c1c1c]">Lead CRM Workspace</h3>
+                <p className="text-sm font-bold text-[#8c8a86]">{activeTicket?.customer}</p>
+              </div>
+              <button onClick={() => setIsSidebarOpen(false)} className="text-[#8c8a86] hover:text-[#1c1c1c] transition-colors p-2 bg-[#f5f3ef] rounded-full shadow-sm border border-[#e5e0d8]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              
+              <div className="space-y-4 bg-white p-5 rounded-2xl border border-[#e5e0d8] shadow-sm">
+                <div>
+                  <label className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <CalendarIcon className="w-3.5 h-3.5 text-[#e25f38]" /> Next Follow-Up Date
+                  </label>
+                  <input 
+                    type="date" 
+                    value={crmData.follow_up_date} 
+                    onChange={(e) => setCrmData({...crmData, follow_up_date: e.target.value})}
+                    className="w-full bg-[#f5f3ef] border border-[#e5e0d8] focus:border-[#e25f38] rounded-xl p-3 font-bold text-[#1c1c1c] outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-[#1c1c1c] uppercase tracking-widest mb-2 block">Internal Admin Notes</label>
+                  <textarea 
+                    value={crmData.admin_notes} 
+                    onChange={(e) => setCrmData({...crmData, admin_notes: e.target.value})}
+                    placeholder="Record negotiation details, budget constraints, or competitor quotes here..."
+                    className="w-full bg-[#f5f3ef] border border-[#e5e0d8] focus:border-[#e25f38] rounded-xl p-3 font-bold text-[#1c1c1c] outline-none transition-colors min-h-[120px] resize-none"
+                  />
+                </div>
+                <button 
+                  onClick={() => {
+                    updateMutation.mutate({ id: activeTicket.id, updates: { admin_notes: crmData.admin_notes, follow_up_date: crmData.follow_up_date } });
+                    setIsSidebarOpen(false);
+                  }}
+                  className="w-full py-3.5 bg-[#1c1c1c] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-black transition-colors shadow-lg active:scale-95 mt-2"
+                >
+                  <Save className="w-4 h-4" /> Save CRM Data
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REVERTED: Financial Quote Modal */}
       {isQuoteModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50">
-              <h3 className="font-semibold text-gray-900">Set Proposal Price</h3>
-              <button onClick={() => setIsQuoteModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="w-5 h-5" /></button>
+        <div className="fixed inset-0 bg-[#1c1c1c]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b border-[#e5e0d8] flex justify-between items-center bg-[#fdfbf7]">
+              <div>
+                <h3 className="font-black text-xl text-[#1c1c1c]">Financial Proposal</h3>
+                <p className="text-sm font-bold text-[#8c8a86]">{activeTicket?.customer}</p>
+              </div>
+              <button onClick={() => setIsQuoteModalOpen(false)} className="text-[#8c8a86] hover:text-[#1c1c1c] transition-colors p-2 bg-white rounded-full shadow-sm border border-[#e5e0d8]">
+                <X className="w-5 h-5" />
+              </button>
             </div>
             
             <form onSubmit={(e) => { e.preventDefault(); const total = calculateGrandTotal(); if (total > 0) { updateMutation.mutate({ id: activeTicket.id, updates: { total: total, status: 'awaiting-deposit' } }); setIsQuoteModalOpen(false); } }} className="p-6">
-              <div className="space-y-4 mb-6">
+              <div className="space-y-4 mb-8">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Base Food & Beverage</label>
+                  <label className="block text-[10px] font-black text-[#8c8a86] mb-1 uppercase tracking-widest">Base Food & Beverage</label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 text-sm">GHS</span>
-                    <input type="number" required value={quoteDetails.foodCost} onChange={(e) => setQuoteDetails({...quoteDetails, foodCost: e.target.value})} className="w-full pl-12 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 focus:ring-1 focus:ring-gray-500 focus:border-gray-500 outline-none" placeholder="0.00" />
+                    <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-[#8c8a86] font-bold">GHS</span>
+                    <input type="number" required value={quoteDetails.foodCost} onChange={(e) => setQuoteDetails({...quoteDetails, foodCost: e.target.value})} className="w-full pl-14 pr-4 py-3 bg-[#f5f3ef] border border-[#e5e0d8] rounded-xl font-black text-[#1c1c1c] outline-none focus:border-[#e25f38] transition-colors" placeholder="0.00" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Logistics (10%)</label>
+                    <label className="block text-[10px] font-black text-[#8c8a86] mb-1 uppercase tracking-widest">Logistics (10%)</label>
                     <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 text-sm">GHS</span>
-                      <input type="number" required value={quoteDetails.logistics} onChange={(e) => setQuoteDetails({...quoteDetails, logistics: e.target.value})} className="w-full pl-12 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 focus:ring-1 focus:ring-gray-500 focus:border-gray-500 outline-none" placeholder="0.00" />
+                      <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-[#8c8a86] font-bold">GHS</span>
+                      <input type="number" required value={quoteDetails.logistics} onChange={(e) => setQuoteDetails({...quoteDetails, logistics: e.target.value})} className="w-full pl-14 pr-4 py-3 bg-[#f5f3ef] border border-[#e5e0d8] rounded-xl font-black text-[#1c1c1c] outline-none focus:border-[#e25f38] transition-colors" placeholder="0.00" />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Discount</label>
+                    <label className="block text-[10px] font-black text-[#8c8a86] mb-1 uppercase tracking-widest">Discount</label>
                     <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 text-sm">GHS</span>
-                      <input type="number" value={quoteDetails.discount} onChange={(e) => setQuoteDetails({...quoteDetails, discount: e.target.value})} className="w-full pl-12 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 focus:ring-1 focus:ring-gray-500 focus:border-gray-500 outline-none" placeholder="0.00" />
+                      <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-[#8c8a86] font-bold">GHS</span>
+                      <input type="number" value={quoteDetails.discount} onChange={(e) => setQuoteDetails({...quoteDetails, discount: e.target.value})} className="w-full pl-14 pr-4 py-3 bg-[#f5f3ef] border border-[#e5e0d8] rounded-xl font-black text-[#1c1c1c] outline-none focus:border-[#e25f38] transition-colors" placeholder="0.00" />
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-md mb-6 border border-gray-200 flex justify-between items-center">
-                <p className="text-sm font-medium text-gray-600">Grand Total</p>
-                <h3 className="text-xl font-semibold text-gray-900">{formatCurrency(calculateGrandTotal())}</h3>
+              <div className="bg-[#1c1c1c] p-5 rounded-2xl mb-6 shadow-xl text-white flex justify-between items-center">
+                <div>
+                  <p className="text-xs font-bold text-[#cfccc6] uppercase tracking-widest">Grand Total</p>
+                  <p className="text-sm font-medium text-[#8c8a86]">Final payable amount</p>
+                </div>
+                <h3 className="text-3xl font-black text-[#e25f38]">{formatCurrency(calculateGrandTotal())}</h3>
               </div>
 
-              <button type="submit" className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-md hover:bg-black transition-colors shadow-sm">
-                Save & Request Deposit
+              <button type="submit" className="w-full flex items-center justify-center gap-2 px-4 py-4 bg-[#e25f38] text-white font-bold rounded-xl shadow-lg hover:bg-[#c9512e] transition-colors active:scale-95">
+                <CheckCircle className="w-5 h-5" /> Save & Request Deposit
               </button>
             </form>
           </div>
         </div>
       )}
 
+      {/* REVERTED: PDF Invoice Modal */}
       {isInvoiceModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-8 text-center border border-gray-200">
-            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100">
-               <FileText className="w-6 h-6 text-gray-600" />
+        <div className="fixed inset-0 bg-[#1c1c1c]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-8 text-center">
+            <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-emerald-100">
+               <FileText className="w-8 h-8 text-emerald-500" />
             </div>
-            <h3 className="font-semibold text-lg text-gray-900 mb-2">Invoice Ready</h3>
-            <p className="text-sm text-gray-500 mb-6">Pro-Forma Invoice for {activeTicket?.customer} generated successfully.</p>
+            <h3 className="font-black text-2xl text-[#1c1c1c] mb-2">Invoice Ready</h3>
+            <p className="text-sm font-bold text-[#8c8a86] mb-8 px-4 leading-relaxed">
+              A professional Pro-Forma Invoice for {activeTicket?.customer} has been generated. Click below to print or save as PDF.
+            </p>
             
-            <div className="space-y-2.5">
-              <button onClick={() => window.print()} className="w-full py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-md shadow-sm flex items-center justify-center gap-2 hover:bg-black transition-colors">
-                <Printer className="w-4 h-4" /> Download PDF
+            <div className="space-y-3">
+              <button onClick={() => window.print()} className="w-full py-4 bg-[#1c1c1c] text-white font-bold rounded-xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                <Printer className="w-5 h-5" /> Download / Print PDF
               </button>
-              <button onClick={() => setIsInvoiceModalOpen(false)} className="w-full py-2.5 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-50 transition-colors">
+              <button onClick={() => setIsInvoiceModalOpen(false)} className="w-full py-4 bg-white border border-[#e5e0d8] text-[#1c1c1c] font-bold rounded-xl hover:bg-[#f5f3ef] transition-colors">
                 Cancel
               </button>
             </div>
@@ -351,6 +407,7 @@ export default function CateringQuotes() {
         </div>
       )}
 
+      {/* THE HIDDEN PRINTABLE INVOICE REMAINS UNCHANGED (A4 LAYOUT) */}
       {activeTicket && (
         <div className="hidden print:block absolute inset-0 bg-white z-[99999] min-h-screen text-black">
           <div className="flex justify-between items-start border-b-2 border-gray-200 pb-8 mb-8">
