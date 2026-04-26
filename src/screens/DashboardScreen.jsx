@@ -1,149 +1,151 @@
 import React from 'react';
-import { TrendingUp, ShoppingBag, UtensilsCrossed, FileText, Loader2, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { TrendingUp, ShoppingBag, UtensilsCrossed, FileText, Loader2, Clock, ShieldCheck, Activity } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../utils/helpers';
 
 export const DashboardScreen = ({ setActiveTab }) => {
   
-  // LIVE SUPABASE FETCH: Pulls the pulse of the entire restaurant
   const { data: metrics, isLoading } = useQuery({
     queryKey: ['dashboardMetrics'],
     queryFn: async () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // 1. Fetch Today's Orders & Revenue
       const { data: orders } = await supabase
         .from('orders')
         .select('total_amount, status, created_at')
         .gte('created_at', today.toISOString())
         .neq('status', 'cancelled');
 
-      // 2. Fetch Active Inventory Count
       const { count: activeMenuCount } = await supabase
         .from('inventory')
         .select('*', { count: 'exact', head: true })
         .eq('is_available', true);
 
-      // 3. Fetch Pending Catering Quotes
       const { data: quotes } = await supabase
         .from('catering_requests')
         .select('total, status')
-        .in('status', ['new-request', 'quoted', 'deposit-paid']);
+        .in('status', ['new-request', 'negotiation', 'awaiting-deposit']);
 
-      const validOrders = orders || [];
-      const todaysRevenue = validOrders.reduce((sum, order) => sum + Number(order.total_amount), 0);
-      const pendingOrders = validOrders.filter(o => o.status === 'pending' || o.status === 'prepping').length;
-      
-      const validQuotes = quotes || [];
-      const pipelineValue = validQuotes.reduce((sum, q) => sum + (Number(q.total) || 0), 0);
-      const newLeads = validQuotes.filter(q => q.status === 'new-request').length;
+      const todayRevenue = orders?.reduce((sum, order) => sum + Number(order.total_amount), 0) || 0;
+      const todayOrders = orders?.length || 0;
+      const activeQuotes = quotes?.length || 0;
+      const pipelineValue = quotes?.reduce((sum, quote) => sum + (Number(quote.total) || 0), 0) || 0;
 
       return {
-        todaysRevenue,
-        totalOrdersToday: validOrders.length,
-        pendingOrders,
-        activeMenuCount: activeMenuCount || 0,
+        todayRevenue,
+        todayOrders,
+        activeMenuCount,
         pipelineValue,
-        newLeads
+        activeQuotes
       };
-    }
+    },
+    refetchInterval: 30000 
   });
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#e25f38] mb-4" />
-        <p className="font-bold text-[#8c8a86]">Syncing Command Center...</p>
-      </div>
-    );
-  }
-
-  const { todaysRevenue, totalOrdersToday, pendingOrders, activeMenuCount, pipelineValue, newLeads } = metrics || {};
 
   const DashboardCard = ({ title, value, subtext, icon: Icon, alert, onClick }) => (
     <div 
       onClick={onClick}
-      className={`bg-white p-6 rounded-3xl border border-[#e5e0d8] shadow-sm relative overflow-hidden transition-all ${onClick ? 'cursor-pointer hover:border-[#1c1c1c]/20 hover:shadow-md active:scale-[0.98]' : ''}`}
+      className={`bg-white p-5 rounded-lg border border-gray-200 shadow-sm transition-all ${onClick ? 'cursor-pointer hover:shadow-md hover:border-gray-300' : ''}`}
     >
       <div className="flex justify-between items-start mb-4">
-        <div className="w-12 h-12 bg-[#f5f3ef] rounded-2xl flex items-center justify-center text-[#1c1c1c]">
-          <Icon className="w-6 h-6" />
+        <div className="p-2 bg-gray-50 rounded-md border border-gray-100">
+          <Icon className="w-4 h-4 text-gray-700" />
         </div>
         {alert > 0 && (
-          <span className="flex items-center gap-1 bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full animate-pulse">
-            <AlertCircle className="w-3 h-3" /> {alert} Action Needed
+          <span className="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-100">
+            {alert} Action Req
           </span>
         )}
       </div>
       <div>
-        <p className="text-[#8c8a86] font-bold text-xs uppercase tracking-widest mb-1">{title}</p>
-        <h3 className="text-3xl font-black text-[#1c1c1c] tracking-tight">{value}</h3>
-        <p className="text-[#8c8a86] font-bold text-sm mt-2">{subtext}</p>
+        <h3 className="text-2xl font-semibold text-gray-900 tracking-tight mb-1">{value}</h3>
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{title}</p>
+        <p className="text-xs text-gray-400 mt-2">{subtext}</p>
       </div>
     </div>
   );
 
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  const { todayRevenue, todayOrders, activeMenuCount, pipelineValue, activeQuotes } = metrics || {};
+
   return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-12 animate-in fade-in duration-500">
+    <div className="p-4 md:p-8 max-w-full mx-auto space-y-6 animate-in fade-in duration-300">
       
-      {/* Header */}
-      <div>
-        <h2 className="text-3xl md:text-4xl font-black text-[#1c1c1c] tracking-tight">Overview</h2>
-        <p className="text-[#8c8a86] font-bold mt-2">Here is what is happening at Bigg Brodass Stopover today.</p>
+      {/* SaaS Status Banner */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-emerald-50 rounded-md border border-emerald-100">
+            <Activity className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900 text-sm">System Operations Normal</h3>
+            <p className="text-xs text-gray-500">Realtime web sockets and order processing are active.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-xs font-medium text-gray-500 bg-gray-50 px-3 py-1.5 rounded-md border border-gray-100">
+          <Clock className="w-3.5 h-3.5" /> Last synced: Just now
+        </div>
       </div>
 
-      {/* Primary Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* High-Density Data Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <DashboardCard 
           title="Today's Revenue" 
-          value={formatCurrency(todaysRevenue)} 
-          subtext="Total gross sales since midnight" 
+          value={formatCurrency(todayRevenue)} 
+          subtext="Gross sales since 00:00" 
           icon={TrendingUp} 
         />
         <DashboardCard 
-          title="Live Orders" 
-          value={totalOrdersToday} 
-          subtext={`${pendingOrders} currently in kitchen`} 
+          title="Active Orders" 
+          value={todayOrders} 
+          subtext="Processed in current shift" 
           icon={ShoppingBag} 
-          alert={pendingOrders}
           onClick={() => setActiveTab && setActiveTab('orders')}
         />
         <DashboardCard 
-          title="Active Menu" 
+          title="Menu Status" 
           value={activeMenuCount} 
-          subtext="Items currently in stock" 
+          subtext="Items currently available" 
           icon={UtensilsCrossed} 
           onClick={() => setActiveTab && setActiveTab('menu')}
         />
         <DashboardCard 
           title="B2B Pipeline" 
           value={formatCurrency(pipelineValue)} 
-          subtext="Value of active catering quotes" 
+          subtext={`${activeQuotes} pending contracts`} 
           icon={FileText} 
-          alert={newLeads}
           onClick={() => setActiveTab && setActiveTab('quotes')}
         />
       </div>
 
-      {/* Quick Action Bar */}
-      <div className="bg-[#1c1c1c] rounded-3xl p-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 text-white overflow-hidden relative">
-        <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#e25f38]/20 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="relative z-10">
-          <h3 className="font-black text-xl mb-1">System is Online & Secure</h3>
-          <p className="text-[#cfccc6] text-sm font-medium">All microservices are synced with Supabase. Marketing engine and POS systems are active.</p>
-        </div>
-        <div className="flex gap-4 w-full md:w-auto relative z-10">
-          <div className="flex items-center gap-2 bg-white/10 border border-white/20 px-4 py-2 rounded-xl font-bold text-sm">
-            <Clock className="w-4 h-4 text-[#cfccc6]" /> Live Sync
+      {/* Split Operations Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm min-h-[300px]">
+          <h3 className="font-semibold text-gray-900 text-sm mb-4">Live Dispatch Feed</h3>
+          <div className="flex flex-col items-center justify-center h-[200px] text-gray-400">
+            <ShoppingBag className="w-8 h-8 mb-2 opacity-50" />
+            <p className="text-sm">Awaiting new incoming orders...</p>
           </div>
-          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl font-bold text-sm">
-            <CheckCircle2 className="w-4 h-4" /> Operations Normal
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm min-h-[300px]">
+          <h3 className="font-semibold text-gray-900 text-sm mb-4">Financial Trajectory</h3>
+          <div className="flex flex-col items-center justify-center h-[200px] text-gray-400">
+            <TrendingUp className="w-8 h-8 mb-2 opacity-50" />
+            <p className="text-sm">Not enough data to graph projection.</p>
           </div>
         </div>
       </div>
-
+      
     </div>
   );
 };
