@@ -9,36 +9,44 @@ import {
   Download,
   Eye,
   FileText,
-  GripVertical,
   Loader2,
   Printer,
   Save,
   Trash2,
-  X
+  X,
+  ChevronDown,
+  Clock
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../utils/helpers';
 
-const COLUMNS = [
-  { id: 'new-request', title: 'New Leads', color: 'border-blue-500', bg: 'bg-blue-500' },
-  { id: 'negotiation', title: 'In Negotiation', color: 'border-amber-500', bg: 'bg-amber-500' },
-  { id: 'awaiting-deposit', title: 'Awaiting Deposit', color: 'border-purple-500', bg: 'bg-purple-500' },
-  { id: 'secured', title: 'Secured Contracts', color: 'border-emerald-500', bg: 'bg-emerald-500' }
+const PIPELINE_STAGES = [
+  { id: 'All', label: 'All Leads' },
+  { id: 'new-request', label: 'New Leads', dot: 'bg-blue-500' },
+  { id: 'negotiation', label: 'In Negotiation', dot: 'bg-amber-500' },
+  { id: 'awaiting-deposit', label: 'Awaiting Deposit', dot: 'bg-purple-500' },
+  { id: 'secured', label: 'Secured Contracts', dot: 'bg-emerald-500' }
 ];
 
-const ALLOWED_TRANSITIONS = {
-  'new-request': ['negotiation'],
-  negotiation: ['awaiting-deposit'],
-  'awaiting-deposit': ['secured'],
-  secured: []
-};
-
+// UPGRADED PARSER: Extracts the new Price payload
 function parseDishString(dishString) {
-  if (!dishString || typeof dishString !== 'string') return { title: 'Unknown Item', details: null };
+  if (!dishString || typeof dishString !== 'string') return { title: 'Unknown Item', price: null, details: null };
+  
+  // New Format Handler (Name || Price || Details)
+  if (dishString.includes(' || ')) {
+    const parts = dishString.split(' || ');
+    return { 
+      title: parts[0]?.trim(), 
+      price: Number(parts[1]) || null, 
+      details: parts[2]?.trim() 
+    };
+  }
+
+  // Legacy Format Handler (Fallback for older quotes)
   const normalized = dishString.replace(/â€”/g, '—').replace(/â€¢/g, '•');
   const parts = normalized.split(/\s[—-]\s/);
-  return { title: (parts[0] || 'Unknown Item').trim(), details: parts[1] ? parts[1].trim() : null };
+  return { title: (parts[0] || 'Unknown Item').trim(), price: null, details: parts[1] ? parts[1].trim() : null };
 }
 
 function getNotesLines(notes) {
@@ -69,17 +77,10 @@ function getFollowUpBadge(ticket) {
   return { label: 'Scheduled', tone: 'text-amber-600 bg-amber-50 border-amber-200' };
 }
 
-function canTransition(fromStatus, toStatus, ticket) {
-  if (!fromStatus || fromStatus === toStatus) return true;
-  const allowed = ALLOWED_TRANSITIONS[fromStatus] || [];
-  if (!allowed.includes(toStatus)) return false;
-  if (toStatus === 'awaiting-deposit' && !(Number(ticket?.total) > 0)) return false;
-  return true;
-}
-
 export default function CateringQuotes() {
   const queryClient = useQueryClient();
 
+  const [activeTab, setActiveTab] = useState('All');
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
@@ -128,9 +129,10 @@ export default function CateringQuotes() {
   });
 
   const totalsByColumn = useMemo(() => {
-    return COLUMNS.reduce((acc, column) => {
-      const scoped = tickets.filter((ticket) => ticket.status === column.id);
-      acc[column.id] = {
+    return PIPELINE_STAGES.reduce((acc, stage) => {
+      if (stage.id === 'All') return acc;
+      const scoped = tickets.filter((ticket) => ticket.status === stage.id);
+      acc[stage.id] = {
         count: scoped.length,
         total: scoped.reduce((sum, ticket) => sum + (Number(ticket.total) || 0), 0)
       };
@@ -141,29 +143,12 @@ export default function CateringQuotes() {
   const activePipelineTotal = (totalsByColumn.negotiation?.total || 0) + (totalsByColumn['awaiting-deposit']?.total || 0);
   const closedWonTotal = totalsByColumn.secured?.total || 0;
 
-  const handleDragStart = (event, ticketId) => {
-    event.dataTransfer.setData('ticketId', ticketId);
-  };
-
-  const handleDragOver = (event) => event.preventDefault();
-
-  const handleDrop = (event, newStatus) => {
-    event.preventDefault();
-    const ticketId = event.dataTransfer.getData('ticketId');
-    if (!ticketId) return;
-    const ticket = tickets.find((item) => String(item.id) === String(ticketId));
-    if (!ticket) return;
-
-    if (!canTransition(ticket.status, newStatus, ticket)) {
-      if (newStatus === 'awaiting-deposit' && !(Number(ticket.total) > 0)) {
-        setErrorMessage('Assign a final price before moving this lead to Awaiting Deposit.');
-      } else {
-        setErrorMessage('That move is not allowed in this workflow.');
-      }
+  const handleStatusChange = (ticket, newStatus) => {
+    if (newStatus === 'awaiting-deposit' && !(Number(ticket.total) > 0)) {
+      setErrorMessage(`Assign a final price to ${ticket.customer} before requesting a deposit.`);
       return;
     }
-
-    updateMutation.mutate({ id: ticketId, updates: { status: newStatus } });
+    updateMutation.mutate({ id: ticket.id, updates: { status: newStatus } });
   };
 
   const openQuoteModal = (ticket) => {
@@ -218,6 +203,11 @@ export default function CateringQuotes() {
     deleteMutation.mutate(ticket.id);
   };
 
+  const filteredTickets = useMemo(() => {
+    if (activeTab === 'All') return tickets;
+    return tickets.filter(t => t.status === activeTab);
+  }, [tickets, activeTab]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] print:hidden">
@@ -234,129 +224,145 @@ export default function CateringQuotes() {
 
   return (
     <>
-      <div className="max-w-full mx-auto space-y-6 overflow-hidden h-[calc(100vh-8rem)] flex flex-col print:hidden">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4 shrink-0 w-full">
+      <div className="max-w-6xl mx-auto space-y-6 pb-24 print:hidden animate-in fade-in duration-300">
+        
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-2 shrink-0 w-full">
           <div>
-            <p className="text-[#8c8a86] font-bold text-xs uppercase tracking-wider mb-1">Corporate & Events CRM</p>
-            <h2 className="text-3xl font-black text-[#1c1c1c] leading-none">Catering Pipeline</h2>
+            <h2 className="text-3xl font-black text-[#1c1c1c] tracking-tight">Catering CRM</h2>
+            <p className="text-[#8c8a86] font-bold text-sm mt-1">Manage corporate leads, proposals, and deposits.</p>
           </div>
-          <div className="bg-[#1c1c1c] w-full md:w-auto px-5 py-3 rounded-xl shadow-lg flex justify-between md:justify-start gap-4 md:gap-6 text-sm font-bold text-white">
+          <div className="bg-white px-6 py-4 rounded-2xl border border-[#e5e0d8] shadow-sm flex justify-between md:justify-start gap-6 md:gap-8 text-sm font-bold text-[#1c1c1c] w-full md:w-auto">
             <div className="flex flex-col">
-              <span className="text-[#8c8a86] text-[10px] md:text-xs uppercase tracking-widest">Active Pipeline</span>
-              <span className="text-lg">{formatCurrency(activePipelineTotal)}</span>
+              <span className="text-[#8c8a86] text-[10px] uppercase tracking-widest mb-1">Active Pipeline</span>
+              <span className="text-xl font-black text-[#1c1c1c] leading-none">{formatCurrency(activePipelineTotal)}</span>
             </div>
-            <div className="w-px bg-white/20"></div>
+            <div className="w-px bg-[#e5e0d8]"></div>
             <div className="flex flex-col items-end md:items-start">
-              <span className="text-[#8c8a86] text-[10px] md:text-xs uppercase tracking-widest">Closed Won</span>
-              <span className="text-emerald-400 text-lg">{formatCurrency(closedWonTotal)}</span>
+              <span className="text-[#8c8a86] text-[10px] uppercase tracking-widest mb-1">Closed Won</span>
+              <span className="text-emerald-500 text-xl font-black leading-none">{formatCurrency(closedWonTotal)}</span>
             </div>
           </div>
         </div>
 
         {errorMessage && (
-          <div className="flex items-start gap-2 p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-semibold shrink-0">
-            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="flex items-center gap-3 p-4 rounded-2xl border border-red-200 bg-red-50 text-red-600 text-sm font-bold shadow-sm animate-in slide-in-from-top-2">
+            <AlertCircle className="w-5 h-5 shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
 
-        <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 flex-1 items-start snap-x snap-mandatory hide-scrollbar">
-          {COLUMNS.map((column) => (
-            <div
-              key={column.id}
-              className="bg-[#e5e0d8]/30 rounded-2xl min-w-[300px] md:min-w-[340px] max-w-[300px] md:max-w-[340px] flex flex-col h-full max-h-full border border-[#e5e0d8]/50 overflow-hidden snap-center shrink-0"
-              onDragOver={handleDragOver}
-              onDrop={(event) => handleDrop(event, column.id)}
-            >
-              <div className="p-4 border-b border-[#e5e0d8] flex justify-between items-center bg-[#f5f3ef] shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${column.bg}`}></div>
-                  <h3 className="text-md font-bold text-[#1c1c1c] tracking-wide">{column.title}</h3>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-[#1c1c1c] font-black">{formatCurrency(totalsByColumn[column.id]?.total || 0)}</span>
-                  <span className="text-[#8c8a86] text-xs font-bold">{totalsByColumn[column.id]?.count || 0} Leads</span>
-                </div>
-              </div>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+          {PIPELINE_STAGES.map((stage) => {
+            const isActive = activeTab === stage.id;
+            const count = stage.id === 'All' ? tickets.length : (totalsByColumn[stage.id]?.count || 0);
+            return (
+              <button 
+                key={stage.id} 
+                onClick={() => setActiveTab(stage.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all ${
+                  isActive ? 'bg-[#1c1c1c] text-white shadow-md' : 'bg-white border border-[#e5e0d8] text-[#8c8a86] hover:bg-[#f5f3ef]'
+                }`}
+              >
+                {stage.dot && <span className={`w-2 h-2 rounded-full ${stage.dot}`}></span>}
+                {stage.label}
+                <span className={`px-2 py-0.5 rounded-md text-[10px] ml-1 ${isActive ? 'bg-white/20 text-white' : 'bg-[#f5f3ef] text-[#1c1c1c]'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-              <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
-                {tickets.filter((ticket) => ticket.status === column.id).map((ticket) => {
-                  const dishesList = Array.isArray(ticket.dishes) ? ticket.dishes : [];
-                  const followUpState = getFollowUpBadge(ticket);
+        <div className="space-y-4">
+          {filteredTickets.length === 0 ? (
+            <div className="p-16 flex flex-col items-center justify-center text-center bg-white border border-[#e5e0d8] border-dashed rounded-3xl">
+              <Briefcase className="w-12 h-12 text-[#cfccc6] mb-4" />
+              <h3 className="text-lg font-black text-[#1c1c1c] mb-1">No leads found</h3>
+              <p className="text-sm font-bold text-[#8c8a86]">Your pipeline for this stage is currently empty.</p>
+            </div>
+          ) : (
+            filteredTickets.map((ticket) => {
+              const followUpState = getFollowUpBadge(ticket);
+              const isPending = !ticket.total;
 
-                  return (
-                    <div
-                      key={ticket.id}
-                      draggable
-                      onDragStart={(event) => handleDragStart(event, ticket.id)}
-                      className={`bg-white rounded-xl p-5 shadow-sm border-l-4 ${column.color} hover:shadow-md transition-all cursor-grab active:cursor-grabbing group relative`}
-                    >
-                      <div className="absolute right-3 top-4 text-gray-300 hidden md:block md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        <GripVertical className="w-5 h-5" />
+              return (
+                <div key={ticket.id} className="bg-white rounded-3xl border border-[#e5e0d8] p-5 shadow-sm hover:shadow-md hover:border-[#1c1c1c]/20 transition-all flex flex-col lg:flex-row justify-between lg:items-center gap-6">
+                  
+                  <div className="flex-1 w-full min-w-0">
+                    <div className="flex items-center gap-3 mb-3 flex-wrap">
+                      <div className="relative">
+                        <select
+                          value={ticket.status}
+                          onChange={(e) => handleStatusChange(ticket, e.target.value)}
+                          className={`appearance-none font-black text-[10px] uppercase tracking-wider px-3 py-1.5 pr-8 rounded-lg border outline-none cursor-pointer transition-colors ${
+                            ticket.status === 'new-request' ? 'bg-blue-50 text-blue-600 border-blue-200' :
+                            ticket.status === 'negotiation' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                            ticket.status === 'awaiting-deposit' ? 'bg-purple-50 text-purple-600 border-purple-200' :
+                            'bg-emerald-50 text-emerald-600 border-emerald-200'
+                          }`}
+                        >
+                          <option value="new-request">New Request</option>
+                          <option value="negotiation">In Negotiation</option>
+                          <option value="awaiting-deposit">Awaiting Deposit</option>
+                          <option value="secured">Secured</option>
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50" />
                       </div>
-
-                      <h4 className="font-black text-[#1c1c1c] mb-1 pr-6">{ticket.customer}</h4>
-                      <p className="text-xs font-bold text-[#e25f38] mb-3 uppercase tracking-wider">{ticket.event}</p>
 
                       {followUpState && (
-                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider mb-3 border ${followUpState.tone}`}>
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${followUpState.tone}`}>
                           <CalendarIcon className="w-3 h-3" />
                           {followUpState.label}: {new Date(ticket.follow_up_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                        </div>
+                        </span>
                       )}
-
-                      <div className="text-sm text-[#8c8a86] mb-4 space-y-3">
-                        <ul className="space-y-1 font-medium">
-                          {dishesList.slice(0, 2).map((dish, index) => {
-                            const parsed = parseDishString(dish);
-                            return (
-                              <li key={index} className="truncate before:content-['•'] before:mr-2 before:text-[#e25f38]">
-                                {parsed.title}
-                              </li>
-                            );
-                          })}
-                          {dishesList.length > 2 && <li className="text-xs italic pl-4">+ {dishesList.length - 2} more items</li>}
-                        </ul>
-                      </div>
-
-                      <div className="flex justify-between items-center mt-5 pt-4 border-t border-[#e5e0d8]">
-                        <div className="font-black text-[#1c1c1c]">
-                          {ticket.total ? (
-                            formatCurrency(ticket.total)
-                          ) : (
-                            <span className="text-[#8c8a86] text-sm flex items-center gap-1">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              Pricing Pending
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => openDetailsModal(ticket)} className="p-2 text-[#8c8a86] hover:bg-[#1c1c1c] hover:text-white rounded-lg transition-colors" title="View Full Details">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => openInvoiceModal(ticket)} className="p-2 text-[#8c8a86] hover:bg-emerald-50 hover:text-emerald-600 rounded-lg transition-colors" title="Download PDF Invoice">
-                            <Download className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => openQuoteModal(ticket)} className="p-2 text-[#8c8a86] hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors" title="Manage Price">
-                            <Banknote className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => openCRMSidebar(ticket)} className="p-2 text-[#8c8a86] hover:bg-[#1c1c1c] hover:text-white rounded-lg transition-colors" title="Open CRM">
-                            <Briefcase className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleDelete(ticket)} className="p-2 text-[#8c8a86] hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors" title="Delete">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+
+                    <h3 className="text-xl font-black text-[#1c1c1c] leading-tight truncate mb-1">{ticket.customer}</h3>
+                    <p className="text-sm font-bold text-[#e25f38] mb-3">{ticket.event}</p>
+                    
+                    <p className="text-xs font-medium text-[#8c8a86] line-clamp-1 border-l-2 border-[#e5e0d8] pl-3">
+                      {Array.isArray(ticket.dishes) ? parseDishString(ticket.dishes[0]).title : ticket.dishes}
+                      {Array.isArray(ticket.dishes) && ticket.dishes.length > 1 && <span className="italic ml-2">(+{ticket.dishes.length - 1} items)</span>}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-row lg:flex-col justify-between lg:justify-center items-center lg:items-end w-full lg:w-auto gap-4 lg:gap-3 border-t lg:border-t-0 border-[#e5e0d8] pt-4 lg:pt-0">
+                    
+                    <div className="text-left lg:text-right">
+                      <p className="text-[10px] font-black uppercase text-[#8c8a86] tracking-widest mb-0.5">Quote Value</p>
+                      <p className={`font-black text-2xl tracking-tight ${isPending ? 'text-[#8c8a86]' : 'text-[#1c1c1c]'}`}>
+                        {isPending ? 'Pending' : formatCurrency(ticket.total)}
+                      </p>
+                    </div>
+
+                    {/* OVERFLOW FIX: Added flex-wrap and responsive padding */}
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openDetailsModal(ticket)} className="p-2 md:p-2.5 bg-[#f5f3ef] text-[#8c8a86] hover:bg-[#1c1c1c] hover:text-white rounded-xl transition-colors" title="View Full Details">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => openCRMSidebar(ticket)} className="p-2 md:p-2.5 bg-[#f5f3ef] text-[#8c8a86] hover:bg-[#1c1c1c] hover:text-white rounded-xl transition-colors" title="Open CRM">
+                        <Briefcase className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => openQuoteModal(ticket)} className="p-2 md:p-2.5 bg-[#f5f3ef] text-[#8c8a86] hover:bg-amber-100 hover:text-amber-600 rounded-xl transition-colors" title="Manage Price">
+                        <Banknote className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => openInvoiceModal(ticket)} className="p-2 md:p-2.5 bg-[#f5f3ef] text-[#8c8a86] hover:bg-emerald-100 hover:text-emerald-600 rounded-xl transition-colors" title="Download PDF Invoice">
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleDelete(ticket)} className="p-2 md:p-2.5 bg-[#f5f3ef] text-[#8c8a86] hover:bg-red-100 hover:text-red-600 rounded-xl transition-colors ml-1" title="Delete">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
+      {/* UPGRADED LEAD DETAILS MODAL WITH TIMESTAMP & INDIVIDUAL PRICES */}
       {isDetailsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1c1c1c]/50 backdrop-blur-sm print:hidden">
           <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-[420px] overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
@@ -364,6 +370,9 @@ export default function CateringQuotes() {
               <div>
                 <h3 className="font-black text-xl text-[#1c1c1c]">Lead Details</h3>
                 <p className="text-sm font-bold text-[#8c8a86]">{activeTicket?.customer}</p>
+                <p className="text-[10px] font-bold text-[#8c8a86] uppercase tracking-widest mt-2 flex items-center gap-1.5">
+                  <Clock className="w-3 h-3" /> Submitted: {new Date(activeTicket?.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </p>
               </div>
               <button onClick={() => setIsDetailsModalOpen(false)} className="text-[#8c8a86] hover:text-[#1c1c1c] transition-colors p-2 bg-white rounded-full shadow-sm border border-[#e5e0d8]">
                 <X className="w-5 h-5" />
@@ -383,11 +392,19 @@ export default function CateringQuotes() {
                     activeTicket.dishes.map((dish, index) => {
                       const parsed = parseDishString(dish);
                       return (
-                        <div key={index} className="flex items-center gap-3 bg-[#fdfbf7] border border-[#e5e0d8] p-4 rounded-2xl shadow-sm">
-                          <div className="w-6 h-6 rounded-full border-[1.5px] border-[#e25f38] flex items-center justify-center shrink-0">
-                            <Check className="w-3.5 h-3.5 text-[#e25f38] stroke-[3]" />
+                        <div key={index} className="flex justify-between items-center gap-3 bg-[#fdfbf7] border border-[#e5e0d8] p-4 rounded-2xl shadow-sm">
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full border-[1.5px] border-[#e25f38] flex items-center justify-center shrink-0 mt-0.5">
+                              <Check className="w-3.5 h-3.5 text-[#e25f38] stroke-[3]" />
+                            </div>
+                            <div>
+                              <span className="font-bold text-[#1c1c1c] text-[13px] block">{parsed.title}</span>
+                              {parsed.details && <span className="text-xs font-medium text-[#8c8a86] block mt-0.5">{parsed.details}</span>}
+                            </div>
                           </div>
-                          <span className="font-bold text-[#1c1c1c] text-[13px]">{parsed.title}</span>
+                          {parsed.price !== null && (
+                            <span className="font-black text-[#1c1c1c] shrink-0 pl-2">{formatCurrency(parsed.price)}</span>
+                          )}
                         </div>
                       );
                     })
@@ -412,6 +429,7 @@ export default function CateringQuotes() {
         </div>
       )}
 
+      {/* CRM WORKSPACE MODAL */}
       {isSidebarOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-[#1c1c1c]/50 backdrop-blur-sm print:hidden">
           <div className="absolute inset-0" onClick={() => setIsSidebarOpen(false)}></div>
@@ -472,6 +490,7 @@ export default function CateringQuotes() {
         </div>
       )}
 
+      {/* FINANCIAL PROPOSAL MODAL */}
       {isQuoteModalOpen && (
         <div className="fixed inset-0 bg-[#1c1c1c]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -576,6 +595,7 @@ export default function CateringQuotes() {
         </div>
       )}
 
+      {/* PDF INVOICE MODAL */}
       {isInvoiceModalOpen && (
         <div className="fixed inset-0 bg-[#1c1c1c]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-8 text-center">
@@ -606,6 +626,7 @@ export default function CateringQuotes() {
         </div>
       )}
 
+      {/* HIDDEN A4 PRINT TEMPLATE */}
       {activeTicket && (
         <div className="hidden print:block absolute inset-0 bg-white z-[99999] min-h-screen text-black">
           <div className="flex justify-between items-start border-b-2 border-gray-200 pb-8 mb-8">
@@ -657,7 +678,9 @@ export default function CateringQuotes() {
                         <p className="font-black text-gray-800 text-lg mb-1">{parsed.title}</p>
                         <p className="text-sm font-semibold text-gray-500 leading-relaxed">{parsed.details}</p>
                       </td>
-                      <td className="py-6 text-right font-black text-gray-800 text-lg align-top pt-7">-</td>
+                      <td className="py-6 text-right font-black text-gray-800 text-lg align-top pt-7">
+                        {parsed.price !== null ? formatCurrency(parsed.price) : '-'}
+                      </td>
                     </tr>
                   );
                 })
