@@ -4,6 +4,7 @@ import Swal from 'sweetalert2';
 import { AdminLayout } from './layouts/AdminLayout';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { OrdersListScreen } from './screens/OrdersListScreen';
+import { FleetControlScreen } from './screens/FleetControlScreen';
 import { MenuManagerScreen } from './screens/MenuManagerScreen';
 import { CustomersCRM } from './screens/CustomersCRM';
 import CateringQuotes from './screens/CateringQuotes';
@@ -89,6 +90,7 @@ export default function App() {
         <AdminLayout activeTab={activeTab} setActiveTab={setActiveTab}>
           {activeTab === 'dashboard' && <DashboardScreen setActiveTab={setActiveTab} />}
           {activeTab === 'orders' && <OrdersListScreen />}
+          {activeTab === 'fleet' && <FleetControlScreen />}
           {activeTab === 'menu' && <MenuManagerScreen />}
           {activeTab === 'customers' && <CustomersCRM />}
           {activeTab === 'quotes' && <CateringQuotes />}
