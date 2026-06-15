@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, ShoppingBag, UtensilsCrossed, Users, FileText, BarChart3, Settings, LogOut, Megaphone } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, UtensilsCrossed, Users, FileText, BarChart3, Settings, LogOut, Megaphone, Navigation } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 
 export const Sidebar = ({ activeTab, setActiveTab }) => {
@@ -8,6 +8,7 @@ export const Sidebar = ({ activeTab, setActiveTab }) => {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'orders', label: 'Live Orders', icon: ShoppingBag },
+    { id: 'fleet', label: 'Fleet Control', icon: Navigation },
     { id: 'menu', label: 'Menu Manager', icon: UtensilsCrossed },
     { id: 'customers', label: 'Customers CRM', icon: Users },
     { id: 'quotes', label: 'Catering Quotes', icon: FileText },

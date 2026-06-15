@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, ShoppingBag, UtensilsCrossed, FileText, Loader2, Clock, ShieldCheck, Activity } from 'lucide-react';
+import { TrendingUp, ShoppingBag, UtensilsCrossed, FileText, Loader2, Clock, ShieldCheck, Activity, Navigation } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { formatCurrency } from '../utils/helpers';
@@ -28,6 +28,12 @@ export const DashboardScreen = ({ setActiveTab }) => {
         .select('total, status')
         .in('status', ['new-request', 'negotiation', 'awaiting-deposit']);
 
+      // NEW: Fetch Active Fleet count
+      const { count: onlineRiders } = await supabase
+        .from('riders')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['available', 'busy']);
+
       const todayRevenue = orders?.reduce((sum, order) => sum + Number(order.total_amount), 0) || 0;
       const todayOrders = orders?.length || 0;
       const activeQuotes = quotes?.length || 0;
@@ -38,7 +44,8 @@ export const DashboardScreen = ({ setActiveTab }) => {
         todayOrders,
         activeMenuCount,
         pipelineValue,
-        activeQuotes
+        activeQuotes,
+        onlineRiders: onlineRiders || 0
       };
     },
     refetchInterval: 30000 
@@ -75,7 +82,7 @@ export const DashboardScreen = ({ setActiveTab }) => {
     );
   }
 
-  const { todayRevenue, todayOrders, activeMenuCount, pipelineValue, activeQuotes } = metrics || {};
+  const { todayRevenue, todayOrders, activeMenuCount, pipelineValue, activeQuotes, onlineRiders } = metrics || {};
 
   return (
     <div className="p-4 md:p-8 max-w-full mx-auto space-y-6 animate-in fade-in duration-300">
@@ -96,8 +103,8 @@ export const DashboardScreen = ({ setActiveTab }) => {
         </div>
       </div>
 
-      {/* High-Density Data Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* High-Density Data Grid (Updated to 5 columns for desktop viewing) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <DashboardCard 
           title="Today's Revenue" 
           value={formatCurrency(todayRevenue)} 
@@ -110,6 +117,13 @@ export const DashboardScreen = ({ setActiveTab }) => {
           subtext="Processed in current shift" 
           icon={ShoppingBag} 
           onClick={() => setActiveTab && setActiveTab('orders')}
+        />
+        <DashboardCard 
+          title="Active Fleet" 
+          value={onlineRiders} 
+          subtext="Riders online right now" 
+          icon={Navigation} 
+          onClick={() => setActiveTab && setActiveTab('fleet')}
         />
         <DashboardCard 
           title="Menu Status" 
